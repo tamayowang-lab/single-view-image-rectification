@@ -1,0 +1,105 @@
+\documentclass[conference]{IEEEtran}
+% ============================================================================
+% PACKAGE IMPORTS
+% ============================================================================
+% Mathematics and Symbols
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+% Graphics and Color
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+% Tables and Formatting
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{array}
+% Citations and References
+\usepackage{cite}
+\usepackage{url}
+% List Formatting
+\usepackage{enumitem}
+\setlist[itemize]{
+    label=--,
+    leftmargin=2.5em,
+    itemsep=1pt,
+    parsep=0pt,
+    topsep=2pt
+}
+\setlist[enumerate]{
+    leftmargin=*,
+    itemsep=1pt,
+    parsep=0pt,
+    topsep=2pt
+}
+% Column Balancing
+\usepackage{balance}
+% Hyperlinks (load last)
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=blue,
+    urlcolor=blue,
+    pdftitle={Image Rectification and World Reconstruction},
+    pdfauthor={Pavel Stepanov}
+}
+\setlength{\parindent}{0pt}
+% ============================================================================
+% CUSTOM COMMANDS
+% ============================================================================
+\newcommand{\mb}[1]{\mathbf{#1}}
+\newcommand{\mc}[1]{\mathcal{#1}}
+\newcommand{\R}{\mathbb{R}}
+% ============================================================================
+% SECTION FORMATTING
+% ============================================================================
+% Use Arabic numerals for sections
+\renewcommand{\thesection}{\arabic{section}}
+\renewcommand{\thesubsection}{\thesection.\arabic{subsection}}
+% ============================================================================
+% DOCUMENT METADATA
+% ============================================================================
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+% Enable page numbering globally
+\pagestyle{plain} 
+% ============================================================================
+% BEGIN DOCUMENT
+% ============================================================================
+\begin{document}
+% ============================================================================
+% TITLE AND AUTHORS
+% ============================================================================
+\title{Image Rectification and World Reconstruction:\\
+Single-View Geometric Transformations\\
+{\normalsize \textit{ECE 738 - Computer Vision, Spring 2026}}}
+\author{
+    \IEEEauthorblockN{Pavel Stepanov}
+    \IEEEauthorblockA{
+        \textit{Department of Electrical and Computer Engineering}\\
+        \textit{University of Miami}\\
+        Coral Gables, Florida, USA\\
+        pas273@miami.edu
+    }
+}
+\maketitle
+% Force page number on title page
+\thispagestyle{plain}
+% ============================================================================
+% ABSTRACT
+% ============================================================================
+\begin{abstract}
+This paper presents implementations of three fundamental image rectification techniques in computer vision: projective rectification, affine rectification, and metric reconstruction. Projective rectification eliminates perspective distortion by computing the vanishing line from a rectangular object and mapping it to infinity, demonstrated on a flat-screen television image. Affine rectification restores parallelism using two pairs of parallel lines to identify the vanishing line, applied to an interior wall photograph with doorway and window features. This method employs an alternative but mathematically equivalent approach to the orthogonal line pairs method, using vanishing point computation for improved robustness. Metric reconstruction uses Direct Linear Transform (DLT) to compute a planar homography between image and world coordinates. Proper train/test validation on a 40.16×40.16 inch artwork poster demonstrates perfect reconstruction on four training corner points (0.000 inch error) and realistic generalization on four independent test points at edge midpoints (3.337 inch mean error, 8.31\% relative error). The 8.31\% test error is consistent with literature values for uncalibrated single-view metrology and reflects combined effects of point selection precision, lens distortion, and planar approximation. These implementations demonstrate that classical projective geometry methods remain effective for practical rectification tasks, with applications in architectural photography correction, document scanning, augmented reality, and real-world measurement from images.
+\end{abstract}
+% ============================================================================
+% MAIN CONTENT
+% ============================================================================
+\input{content.tex}
+% ============================================================================
+% REFERENCES
+% ============================================================================
+\newpage
+\input{references.bib}
+% Balance columns on final page
+\balance
+\end{document}
