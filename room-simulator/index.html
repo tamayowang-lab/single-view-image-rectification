@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Headspace · Room vision simulator</title></head>
+<body>
+<div class="app">
+  <header><a class="brand" href="."><span class="brand-icon">◈</span> HEADSPACE <span class="tag">VISION LAB / 01</span></a><span class="live"><i></i> LIVE SIMULATION</span></header>
+  <main>
+    <section class="scene-panel">
+      <div class="scene-heading"><div><span class="eyebrow">A VIRTUAL POINT OF VIEW</span><h1>A room through your eyes.</h1><p>Turn your head. Explore the space.</p></div><span class="scene-badge">SCENE 01 · LIVING ROOM</span></div>
+      <div id="viewport" tabindex="0" aria-label="3D room. Drag to look around, or use arrow keys.">
+        <div id="render-error" role="alert" hidden></div>
+        <div class="view-top"><span><i></i> HEAD CAMERA</span><span id="view-fov">70° VERTICAL FOV</span></div>
+        <div class="crosshair" aria-hidden="true"><span></span></div>
+        <div class="target-label"><span id="target-name">Looking into the room</span><strong id="target-distance">—</strong></div>
+        <div class="view-bottom"><span id="interaction-hint">↔ Click & drag to look around</span><button id="reset">↺ Reset view</button></div>
+      </div>
+      <div class="caption"><span>01 / PROCEDURAL ROOM</span><p>A furnished 6 × 7 m room. All dimensions and distances come from the 3D scene.</p></div>
+    </section>
+    <aside>
+      <section class="instrument"><div class="section-title"><h2>Head position</h2><span class="small-tag">METERS</span></div><p class="muted">An observer at a fixed floor position.</p><div class="coords"><div><span>X</span><strong>0.00</strong></div><div><span>Y · HEIGHT</span><strong id="height-value">1.65</strong></div><div><span>Z</span><strong>2.40</strong></div></div><label for="height">Eye height <output id="height-output">1.65 m</output></label><input id="height" type="range" min="0.8" max="2.1" step="0.01" value="1.65"></section>
+      <section class="instrument"><div class="section-title"><h2>Viewing direction</h2><span class="small-tag">LIVE</span></div><div class="angles"><div><span>TURN / YAW</span><strong id="yaw-value">0°</strong></div><div><span>TILT / PITCH</span><strong id="pitch-value">0°</strong></div></div><label for="fov">Vertical field of view <output id="fov-output">70°</output></label><input id="fov" type="range" min="40" max="100" step="1" value="70"></section>
+      <section class="instrument"><div class="section-title"><h2>At the crosshair</h2><span class="small-tag">SURFACE HIT</span></div><h3 id="object-name">—</h3><p id="object-description" class="muted">Point the crosshair at an object.</p><dl><div><dt>Surface distance</dt><dd id="surface-distance">—</dd></div><div><dt>Width × height × depth</dt><dd id="object-size">—</dd></div></dl></section>
+      <section class="instrument map-section"><div class="section-title"><h2>Room overview</h2><span class="small-tag">TOP VIEW</span></div><canvas id="map" width="520" height="340" aria-label="Overhead room map with camera direction"></canvas><div class="map-legend"><span><i></i> You & viewing cone</span><span>6 × 7 m</span></div></section>
+      <p class="footnote">Drag or use arrow keys to rotate. R resets.<br>Distances are exact scene measurements, not estimates from a photograph.</p>
+    </aside>
+  </main>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body></html>
