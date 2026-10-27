@@ -2,6 +2,8 @@
 
 Open one 2D photograph, run local object detection and relative-depth inference, and click a pixel to direct a virtual head toward that surface. Recognized object bounding boxes retain their color; the remaining image is grayscale. An oval displays the simulated eyesight range, centered on the selected pixel. A separate orbitable 3D point cloud shows the reconstructed visible surfaces and the head's viewing cone.
 
+A head-and-eyes mannequin now sits beside the photograph. Eyes lead a gaze shift, the head follows, and the eyes compensate as the head turns. **Eyes only**, observer-view controls, an optional object tour, and reduced-motion support are included. See [head/eye controls, research references, and reconstruction details](docs/head-eye-simulation.md).
+
 The original furnished-room simulator is still available at `/room.html`.
 
 ## Run the photo workflow
@@ -41,7 +43,7 @@ There is no `src/main.py` in the original Python project. Photo mode starts at `
 
 1. Choose **Open a photo**, or **Try example photo** to use the repository's courtyard image. Uploads accept JPEG, PNG, and WebP. Photos are resized to a maximum of 1024 pixels per side before analysis.
 2. The local models identify COCO objects and predict relative inverse depth. The interface outlines detections, grays the background, and constructs the point cloud. It does not segment exact object silhouettes. Objects outside the model's 80 COCO categories may not be recognized; zero detections is a valid result.
-3. Click the photo to set the gaze center. The head's yaw, pitch, and 3D viewing cone update together. Arrow keys adjust the focused photo's gaze; **Follow the cursor continuously** tracks pointer motion instead.
+3. Click the photo to choose a gaze target. The head and eyes animate beside it; the photo crosshair, eyesight oval, and scene cone follow actual gaze. A small amber marker indicates a requested target while the gaze catches up or is limited. Head and eye yaw/pitch are shown separately. Arrow keys adjust the focused photo's gaze; **Follow the cursor continuously** tracks pointer motion instead.
 4. Adjust the horizontal and vertical eyesight ranges. These are configurable angular ranges, not a physiological eye model. The projected oval clips at the photograph's boundaries; unseen directions cannot be synthesized.
 5. Orbit and zoom the point cloud to inspect the reconstruction. **Save view** downloads the annotated 2D image with the current oval.
 
@@ -73,7 +75,7 @@ npm run build
 TORCH_HOME="$PWD/.cache/torch" .venv/bin/python -m unittest discover -s tests -p '*_test.py' -v
 ```
 
-Geometry tests cover image rays, gaze angles, depth sampling, two-point metric calibration, invalid references, and the projected oval. API tests run actual inference on the courtyard photo, verify chair detections and finite depth, and reject malformed/tiny uploads. Browser validation also covers file upload, grayscale rendering, clicking, cursor following, the point cloud, calibration invalidation, PNG downloads, and mobile layout.
+Geometry and controller tests cover image rays, gaze angles, depth sampling, two-point metric calibration, invalid references, the projected oval, head/eye coordination, eye limits, and binocular convergence. API tests run actual inference on the courtyard photo, verify chair detections and finite depth, and reject malformed/tiny uploads. Browser validation also covers file upload, grayscale rendering, clicking, cursor following, the point cloud, calibration invalidation, PNG downloads, and mobile layout.
 
 ## Original 3D room
 

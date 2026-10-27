@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { HeadEyeModel, pixelForDirection } from './head-eye-model.js';
+import { HeadEyeView } from './head-eye-view.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import sampleUrl from '../../images/2.jpg';
 import { rayForPixel, depthAt, axialDepth, calibrateDepth, estimateBox, gazeAngles, gazeRing } from './photo-geometry.js';
@@ -9,7 +11,16 @@ const $ = id => document.getElementById(id);
 const canvas=$('photo'), ctx=canvas.getContext('2d');
 const original=document.createElement('canvas'), source=original.getContext('2d',{willReadFrequently:true});
 let version=0, data=null, calibration=null, refs=[null,null], picking=null;
-let u=.5,v=.5, vfov=60, hfov=40, efov=28, running=false,pending=false, filename='photo';
+let u=.5,v=.5, targetU=.5,targetV=.5, vfov=60, hfov=40, efov=28, running=false,pending=false, filename='photo';
+const motor=new HeadEyeModel();
+let avatar=null, pose=motor.step(0,true), tour=false,tourIndex=0,tourElapsed=0;
+$('instant-motion').checked=matchMedia('(prefers-reduced-motion: reduce)').matches;
+try {
+  avatar=new HeadEyeView($('head-avatar'));
+  $('avatar-placeholder').hidden=true;
+} catch {
+  $('avatar-placeholder').textContent='WebGL is unavailable. Gaze angles and the photo oval still work; enable hardware acceleration to see the head.';
+}
 const aspect=()=>original.width/original.height;
 function status(text,error=false) { $('status').textContent=text; $('status').classList.toggle('error-text',error); }
 const inBox=(x,y,b)=>x>=b[0]&&x<=b[2]&&y>=b[1]&&y<=b[3];
@@ -34,6 +45,10 @@ function draw() {
     const ty=Math.max(0,y1*h-24),tx=Math.min(x1*w,Math.max(0,w-tw-14));
     ctx.fillStyle='#233b30e6';ctx.fillRect(tx,ty,tw+14,24);
     ctx.fillStyle='#e9fae9';ctx.fillText(title,tx+7,ty+16);
+  }
+  // Small amber marker is the requested point; the white crosshair is actual gaze.
+  if(Math.hypot(targetU-u,targetV-v)>.004){
+    ctx.beginPath();ctx.arc(targetU*w,targetV*h,5,0,Math.PI*2);ctx.strokeStyle='#e9ad58';ctx.lineWidth=2;ctx.stroke();
   }
   const outline=ring();
   ctx.save();ctx.beginPath();ctx.rect(0,0,w,h);ctx.clip();
@@ -72,7 +87,51 @@ function updateReadout() {
     $('footprint').textContent='Physical range requires depth calibration.';
   }
 }
-function updateGaze(){draw();updateReadout();updateCone();}
+function paintGaze(){draw();updateReadout();updateCone();}
+function updateGaze(){
+  const direction=rayForPixel(targetU,targetV,aspect(),vfov);
+  const z=data&&calibration?axialDepth(depthAt(data.depth,targetU,targetV),calibration):null;
+  motor.aim(direction,z===null?null:z/direction.axialFactor);
+  if($('instant-motion').checked)advanceMotion(0,true);
+  paintGaze();
+}
+function stopTour(){tour=false;$('object-tour').textContent='Explore detected objects';$('object-tour').classList.remove('running');$('object-tour').setAttribute('aria-pressed','false');}
+function setGazeTarget(x,y,manual=true){
+  if(manual)stopTour();targetU=x;targetV=y;updateGaze();
+}
+function write(id,text){if($(id).textContent!==text)$(id).textContent=text;}
+function advanceMotion(dt,instant=false){
+  pose=motor.step(dt,instant);
+  if(!canvas.hidden){
+    const point=pixelForDirection(pose.gazeDirection,aspect(),vfov);
+    const changed=Math.abs(point.u-u)+Math.abs(point.v-v)>1e-6;
+    u=point.u;v=point.v;
+    if(changed)paintGaze();
+  }
+  const pair=a=>`${a.yaw.toFixed(1)}° / ${a.pitch.toFixed(1)}°`;
+  write('motion-phase',pose.phase.toUpperCase());
+  write('head-angles',pair(pose.head));write('left-eye-angles',pair(pose.eyes[0]));write('right-eye-angles',pair(pose.eyes[1]));
+  write('vergence-status',pose.vergence?`Converging · ≈ ${pose.distance.toFixed(2)} m`:'Parallel · no metric scale');
+  const host=$('head-avatar');
+  host.dataset.headYaw=pose.head.yaw.toFixed(3);host.dataset.headPitch=pose.head.pitch.toFixed(3);
+  host.dataset.leftEyeYaw=pose.eyes[0].yaw.toFixed(3);host.dataset.rightEyeYaw=pose.eyes[1].yaw.toFixed(3);
+  host.dataset.gazeU=u.toFixed(5);host.dataset.gazeV=v.toFixed(5);host.dataset.targetU=targetU.toFixed(5);host.dataset.targetV=targetV.toFixed(5);
+  host.dataset.limited=String(pose.limited);
+  avatar?.update(pose);
+}
+$('movement-mode').onchange=()=>{motor.setMode($('movement-mode').value);updateGaze();};
+$('instant-motion').onchange=()=>{if($('instant-motion').checked)advanceMotion(0,true);};
+$('avatar-view').onchange=()=>{
+  avatar?.setView($('avatar-view').value);
+  $('observer-note').textContent=$('avatar-view').value==='front'?'Facing you: the head’s right appears on your left. Drag to inspect.':'External observer view. Drag to orbit the head; this does not change its gaze.';
+};
+$('object-tour').onclick=()=>{
+  if(tour){stopTour();return;}
+  if(!data?.objects.length)return;
+  tour=true;tourIndex=0;tourElapsed=0;
+  $('object-tour').textContent='Stop object exploration';$('object-tour').classList.add('running');$('object-tour').setAttribute('aria-pressed','true');
+  const box=data.objects[0].box;setGazeTarget((box[0]+box[2])/2,(box[1]+box[3])/2,false);
+};
 function resetReferences(message='Relative reconstruction · arbitrary scale.') {
   refs=[null,null];calibration=null;picking=null;
   [0,1].forEach(i=>{$(`reference-${i}`).textContent='Not selected';$(`distance-${i}`).value='';$(`pick-${i}`).classList.remove('active');});
@@ -81,6 +140,7 @@ function resetReferences(message='Relative reconstruction · arbitrary scale.') 
 }
 async function loadImage(blob,name) {
   const id=++version;data=null;pending=false;filename=name;
+  stopTour();$('object-tour').disabled=true;motor.reset();targetU=targetV=u=v=.5;
   resetReferences();$('object-list').replaceChildren();$('object-count').textContent='0';
   $('analyze').disabled=true;$('download').disabled=true;
   for(const i of [0,1])$(`pick-${i}`).disabled=true;
@@ -93,7 +153,7 @@ async function loadImage(blob,name) {
     const scale=Math.min(1,1024/Math.max(image.width,image.height));
     original.width=canvas.width=Math.round(image.width*scale);original.height=canvas.height=Math.round(image.height*scale);
     source.drawImage(image,0,0,original.width,original.height);image.close();
-    u=v=.5;$('empty-state').hidden=true;canvas.hidden=false;
+    targetU=targetV=u=v=.5;$('empty-state').hidden=true;canvas.hidden=false;
     $('filename').textContent=`${name} · ${original.width} × ${original.height}`;
     $('analyze').disabled=false;updateGaze();requestAnalysis();
   } catch(error) {if(id===version){status(error.message,true);canvas.hidden=true;$('empty-state').hidden=false;}}
@@ -116,14 +176,14 @@ async function requestAnalysis() {
       }
       const result=await response.json();if(id!==version)continue;
       if(result.width!==canvas.width||result.height!==canvas.height||!result.depth?.values?.length)throw new Error('Analysis returned an incompatible image.');
-      data=result;resetReferences();
+      data=result;resetReferences();stopTour();$('object-tour').disabled=data.objects.length===0;
       $('object-count').textContent=String(data.objects.length);
       const list=$('object-list');list.replaceChildren();
       for(const o of data.objects) {
         const button=document.createElement('button');
         const label=document.createElement('strong');label.textContent=o.label;
         const confidence=document.createElement('span');confidence.textContent=`${Math.round(o.confidence*100)}%`;
-        button.append(label,confidence);button.onclick=()=>{u=(o.box[0]+o.box[2])/2;v=(o.box[1]+o.box[3])/2;updateGaze();};
+        button.append(label,confidence);button.onclick=()=>setGazeTarget((o.box[0]+o.box[2])/2,(o.box[1]+o.box[3])/2);
         list.append(button);
       }
       if(!data.objects.length){const p=document.createElement('p');p.className='muted';p.textContent='No COCO objects above 45% confidence. Depth is still reconstructed.';list.append(p);}
@@ -143,12 +203,12 @@ function pointFromEvent(event) {
   const box=canvas.getBoundingClientRect();
   return {u:THREE.MathUtils.clamp((event.clientX-box.left)/box.width,0,1),v:THREE.MathUtils.clamp((event.clientY-box.top)/box.height,0,1)};
 }
-canvas.addEventListener('pointermove',event=>{if(!$('follow-pointer').checked||picking!==null)return;({u,v}=pointFromEvent(event));updateGaze();});
+canvas.addEventListener('pointermove',event=>{if(!$('follow-pointer').checked||picking!==null)return;const point=pointFromEvent(event);setGazeTarget(point.u,point.v);});
 canvas.addEventListener('click',event=>{
-  const point=pointFromEvent(event);u=point.u;v=point.v;
+  const point=pointFromEvent(event);setGazeTarget(point.u,point.v);
   if(picking!==null&&data){
     const i=picking;refs[i]={...point,distance:Number($(`distance-${i}`).value)};
-    $(`reference-${i}`).textContent=`Pixel ${Math.round(u*canvas.width)}, ${Math.round(v*canvas.height)}`;
+    $(`reference-${i}`).textContent=`Pixel ${Math.round(point.u*canvas.width)}, ${Math.round(point.v*canvas.height)}`;
     $(`pick-${i}`).classList.remove('active');picking=null;$('pointer-hint').textContent='Click to aim · arrow keys to adjust';
     applyCalibration();
   }
@@ -156,9 +216,9 @@ canvas.addEventListener('click',event=>{
 });
 canvas.addEventListener('keydown',event=>{
   const moves={ArrowLeft:[-.01,0],ArrowRight:[.01,0],ArrowUp:[0,-.01],ArrowDown:[0,.01]};
-  if(moves[event.key]){event.preventDefault();u=THREE.MathUtils.clamp(u+moves[event.key][0],0,1);v=THREE.MathUtils.clamp(v+moves[event.key][1],0,1);updateGaze();}
+  if(moves[event.key]){event.preventDefault();setGazeTarget(THREE.MathUtils.clamp(targetU+moves[event.key][0],0,1),THREE.MathUtils.clamp(targetV+moves[event.key][1],0,1));}
 });
-$('center-gaze').onclick=()=>{u=v=.5;updateGaze();};
+$('center-gaze').onclick=()=>setGazeTarget(.5,.5);
 for(const [id,set] of [['eye-fov',value=>hfov=value],['eye-vfov',value=>efov=value]]) {
   $(id).oninput=()=>{set(Number($(id).value));$(id+'-output').textContent=$(id).value+'°';updateGaze();};
 }
@@ -174,7 +234,7 @@ function applyCalibration() {
   buildCloud();updateGaze();
 }
 for(let i=0;i<2;i++) {
-  $(`pick-${i}`).onclick=()=>{picking=picking===i?null:i;[0,1].forEach(j=>$(`pick-${j}`).classList.toggle('active',picking===j));$('pointer-hint').textContent=picking===null?'Click to aim · arrow keys to adjust':`Click surface ${i+1} for calibration`;} ;
+  $(`pick-${i}`).onclick=()=>{stopTour();picking=picking===i?null:i;[0,1].forEach(j=>$(`pick-${j}`).classList.toggle('active',picking===j));$('pointer-hint').textContent=picking===null?'Click to aim · arrow keys to adjust':`Click surface ${i+1} for calibration`;} ;
   $(`distance-${i}`).oninput=applyCalibration;
 }
 $('clear-calibration').onclick=()=>{resetReferences();if(data)buildCloud();updateGaze();};
@@ -236,3 +296,18 @@ function updateCone() {
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(segments,3));
   cone=new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({color:'#b8ed9a',transparent:true,opacity:.75}));scene.add(cone);
 }
+
+let previousFrame=performance.now();
+function animateHead(now){
+  const dt=Math.min(.05,(now-previousFrame)/1000);previousFrame=now;
+  if(tour&&data?.objects.length){
+    tourElapsed+=dt;
+    if(tourElapsed>=1.4){
+      tourElapsed=0;tourIndex=(tourIndex+1)%data.objects.length;
+      const box=data.objects[tourIndex].box;setGazeTarget((box[0]+box[2])/2,(box[1]+box[3])/2,false);
+    }
+  }
+  advanceMotion(dt,$('instant-motion').checked);
+  requestAnimationFrame(animateHead);
+}
+requestAnimationFrame(animateHead);
