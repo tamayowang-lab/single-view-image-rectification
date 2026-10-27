@@ -14,6 +14,10 @@ pas273@miami.edu
 
 ---
 
+## Interactive photo reconstruction prototype
+
+The browser app in [`room-simulator/`](room-simulator/README.md) adds local object detection, monocular relative-depth reconstruction, and a virtual head aimed by clicking a photograph. It shows object outlines, a grayscale background, an eyesight oval, and an orbitable 3D point cloud. See its README for the Python analysis service and browser startup commands. The furnished 3D room demo remains available too.
+
 ## Overview
 
 This project implements three fundamental techniques for geometric image rectification using projective geometry and homogeneous coordinates. The toolkit removes perspective and affine distortions from single-view photographs and enables metric reconstruction from images with known reference objects.
@@ -32,8 +36,7 @@ single-view-image-rectification/
 │   ├── experiment1_projective.py    # Projective rectification
 │   ├── experiment2_affine.py        # Affine rectification
 │   ├── experiment3_world.py         # World plane reconstruction
-│   ├── utils.py                     # Core geometric functions
-│   └── main.py                      # Interactive interface
+│   └── utils.py                     # Core geometric functions
 ├── images/                          # Input images
 ├── results/                         # Output images and data
 ├── docs/                           # LaTeX report
@@ -124,14 +127,9 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Interactive Mode
+### Interactive browser workflow
 
-```bash
-cd src
-python main.py
-```
-
-The interactive interface guides you through all three experiments with step-by-step instructions.
+Use the [photo reconstruction app](room-simulator/README.md) for click-to-aim and depth visualization. There is no `src/main.py` launcher in this checkout. The original experiments below are standalone scripts and require a graphical display for mouse point selection.
 
 ### Individual Experiments
 

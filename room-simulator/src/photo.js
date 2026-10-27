@@ -1,0 +1,238 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import sampleUrl from '../../images/2.jpg';
+import { rayForPixel, depthAt, axialDepth, calibrateDepth, estimateBox, gazeAngles, gazeRing } from './photo-geometry.js';
+import './style.css';
+import './photo.css';
+
+const $ = id => document.getElementById(id);
+const canvas=$('photo'), ctx=canvas.getContext('2d');
+const original=document.createElement('canvas'), source=original.getContext('2d',{willReadFrequently:true});
+let version=0, data=null, calibration=null, refs=[null,null], picking=null;
+let u=.5,v=.5, vfov=60, hfov=40, efov=28, running=false,pending=false, filename='photo';
+const aspect=()=>original.width/original.height;
+function status(text,error=false) { $('status').textContent=text; $('status').classList.toggle('error-text',error); }
+const inBox=(x,y,b)=>x>=b[0]&&x<=b[2]&&y>=b[1]&&y<=b[3];
+function objectAt(x,y) {
+  return data?.objects.filter(o=>inBox(x,y,o.box)).sort((a,b)=>(a.box[2]-a.box[0])*(a.box[3]-a.box[1])-(b.box[2]-b.box[0])*(b.box[3]-b.box[1]))[0];
+}
+function ring() {return gazeRing(u,v,aspect(),vfov,hfov,efov);}
+function draw() {
+  if(!original.width || canvas.hidden) return;
+  const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.filter='grayscale(1)';ctx.drawImage(original,0,0);ctx.filter='none';
+  for(const o of data?.objects??[]) {
+    const [x1,y1,x2,y2]=o.box;
+    ctx.drawImage(original,x1*w,y1*h,(x2-x1)*w,(y2-y1)*h,x1*w,y1*h,(x2-x1)*w,(y2-y1)*h);
+    const selected=o===objectAt(u,v);
+    ctx.strokeStyle=selected?'#f2cc76':'#a0e5c0';ctx.lineWidth=selected?3:2;
+    ctx.strokeRect(x1*w,y1*h,(x2-x1)*w,(y2-y1)*h);
+    ctx.font=`500 ${Math.max(11,w/65)}px system-ui`;
+    const title=`${o.label} · ${Math.round(o.confidence*100)}%`;
+    const tw=ctx.measureText(title).width;
+    const ty=Math.max(0,y1*h-24),tx=Math.min(x1*w,Math.max(0,w-tw-14));
+    ctx.fillStyle='#233b30e6';ctx.fillRect(tx,ty,tw+14,24);
+    ctx.fillStyle='#e9fae9';ctx.fillText(title,tx+7,ty+16);
+  }
+  const outline=ring();
+  ctx.save();ctx.beginPath();ctx.rect(0,0,w,h);ctx.clip();
+  ctx.beginPath();let started=false;
+  for(const p of outline) {
+    if(!p.visible) {started=false;continue;}
+    if(!started){ctx.moveTo(p.u*w,p.v*h);started=true;}else ctx.lineTo(p.u*w,p.v*h);
+  }
+  if(outline.every(p=>p.visible)) ctx.closePath();
+  ctx.fillStyle='#95e2bd22';ctx.fill();ctx.strokeStyle='#eaffc9';ctx.lineWidth=2.5;ctx.setLineDash([8,5]);ctx.stroke();ctx.setLineDash([]);
+  ctx.beginPath();ctx.arc(u*w,v*h,8,0,Math.PI*2);ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(u*w-15,v*h);ctx.lineTo(u*w+15,v*h);ctx.moveTo(u*w,v*h-15);ctx.lineTo(u*w,v*h+15);ctx.stroke();
+  refs.forEach((r,i)=>{if(!r)return;ctx.beginPath();ctx.arc(r.u*w,r.v*h,10,0,Math.PI*2);ctx.fillStyle=i?'#e4ab65':'#7bcef0';ctx.fill();ctx.fillStyle='#172e2a';ctx.font='bold 13px system-ui';ctx.fillText(String(i+1),r.u*w-4,r.v*h+5);});
+  ctx.restore();
+}
+function updateReadout() {
+  if(canvas.hidden) return;
+  const angles=gazeAngles(u,v,aspect(),vfov);
+  $('photo-yaw').textContent=`${angles.yaw.toFixed(1)}°`;
+  $('photo-pitch').textContent=`${angles.pitch.toFixed(1)}°`;
+  const object=objectAt(u,v);
+  $('photo-object').textContent=object?.label??'Scene surface';
+  $('photo-confidence').textContent=object?`${Math.round(object.confidence*100)}% model confidence · visible bounding box`:data?'No recognized object at this pixel.':'Waiting for image analysis.';
+  $('depth-unit').textContent=calibration?'CALIBRATED ESTIMATE':'RELATIVE DEPTH';
+  if(data) {
+    const p=depthAt(data.depth,u,v);
+    $('relative-depth').textContent=`${p.toFixed(2)} / 1`;
+    const z=calibration?axialDepth(p,calibration):null;
+    $('metric-distance').textContent=z===null?(calibration?'Outside calibrated range':'Uncalibrated'):`≈ ${(z/rayForPixel(u,v,aspect(),vfov).axialFactor).toFixed(2)} m`;
+    const size=object?estimateBox(object.box,object.relative_inverse_depth,calibration,aspect(),vfov):null;
+    $('metric-size').textContent=size?`≈ ${size.width.toFixed(2)} × ${size.height.toFixed(2)} m`:calibration?'Unknown':'Uncalibrated';
+    const d=z===null?null:z/rayForPixel(u,v,aspect(),vfov).axialFactor;
+    $('footprint').textContent=d===null?'Physical range requires depth calibration.':`At this range: ≈ ${(2*d*Math.tan(hfov*Math.PI/360)).toFixed(2)} × ${(2*d*Math.tan(efov*Math.PI/360)).toFixed(2)} m on a plane perpendicular to gaze.`;
+  } else {
+    $('relative-depth').textContent='—';$('metric-distance').textContent='Uncalibrated';$('metric-size').textContent='Uncalibrated';
+    $('footprint').textContent='Physical range requires depth calibration.';
+  }
+}
+function updateGaze(){draw();updateReadout();updateCone();}
+function resetReferences(message='Relative reconstruction · arbitrary scale.') {
+  refs=[null,null];calibration=null;picking=null;
+  [0,1].forEach(i=>{$(`reference-${i}`).textContent='Not selected';$(`distance-${i}`).value='';$(`pick-${i}`).classList.remove('active');});
+  $('calibration-status').textContent=message;
+  $('pointer-hint').textContent='Click to aim · arrow keys to adjust';
+}
+async function loadImage(blob,name) {
+  const id=++version;data=null;pending=false;filename=name;
+  resetReferences();$('object-list').replaceChildren();$('object-count').textContent='0';
+  $('analyze').disabled=true;$('download').disabled=true;
+  for(const i of [0,1])$(`pick-${i}`).disabled=true;
+  clearCloud();status('Opening photograph…');
+  try {
+    if(blob.size>25*1024*1024) throw new Error('Choose a photo smaller than 25 MB.');
+    const image=await createImageBitmap(blob);
+    if(id!==version){image.close();return;}
+    if(image.width<64||image.height<64){image.close();throw new Error('The photograph must be at least 64 pixels per side.');}
+    const scale=Math.min(1,1024/Math.max(image.width,image.height));
+    original.width=canvas.width=Math.round(image.width*scale);original.height=canvas.height=Math.round(image.height*scale);
+    source.drawImage(image,0,0,original.width,original.height);image.close();
+    u=v=.5;$('empty-state').hidden=true;canvas.hidden=false;
+    $('filename').textContent=`${name} · ${original.width} × ${original.height}`;
+    $('analyze').disabled=false;updateGaze();requestAnalysis();
+  } catch(error) {if(id===version){status(error.message,true);canvas.hidden=true;$('empty-state').hidden=false;}}
+}
+async function requestAnalysis() {
+  if(canvas.hidden)return;
+  pending=true;if(running)return;
+  running=true;
+  while(pending) {
+    pending=false;const id=version;
+    status('Analyzing objects and visible depth locally…');
+    try {
+      const blob=await new Promise(resolve=>original.toBlob(resolve,'image/jpeg',.92));
+      if(id!==version)continue;
+      const form=new FormData();form.append('image',blob,'photo.jpg');
+      const response=await fetch('/api/analyze',{method:'POST',body:form,signal:AbortSignal.timeout(90000)});
+      if(!response.ok) {
+        let detail='';try{detail=(await response.json()).detail??'';}catch{}
+        throw new Error(detail||`Analysis unavailable (${response.status}). Start the local Python analysis server, then retry.`);
+      }
+      const result=await response.json();if(id!==version)continue;
+      if(result.width!==canvas.width||result.height!==canvas.height||!result.depth?.values?.length)throw new Error('Analysis returned an incompatible image.');
+      data=result;resetReferences();
+      $('object-count').textContent=String(data.objects.length);
+      const list=$('object-list');list.replaceChildren();
+      for(const o of data.objects) {
+        const button=document.createElement('button');
+        const label=document.createElement('strong');label.textContent=o.label;
+        const confidence=document.createElement('span');confidence.textContent=`${Math.round(o.confidence*100)}%`;
+        button.append(label,confidence);button.onclick=()=>{u=(o.box[0]+o.box[2])/2;v=(o.box[1]+o.box[3])/2;updateGaze();};
+        list.append(button);
+      }
+      if(!data.objects.length){const p=document.createElement('p');p.className='muted';p.textContent='No COCO objects above 45% confidence. Depth is still reconstructed.';list.append(p);}
+      [0,1].forEach(i=>$(`pick-${i}`).disabled=false);$('download').disabled=false;
+      buildCloud();updateGaze();
+      status(`${data.objects.length} objects detected · ${data.elapsed_seconds} s · Local analysis complete. Click the photo to aim.`);
+    } catch(error) {
+      if(id===version){status(`Analysis failed: ${error.message}`,true);}
+    }
+  }
+  running=false;
+}
+$('photo-input').addEventListener('change',event=>{const file=event.target.files[0];if(file)loadImage(file,file.name);event.target.value='';});
+$('sample').onclick=async()=>{try{const response=await fetch(sampleUrl);if(!response.ok)throw new Error('Example image is unavailable.');await loadImage(await response.blob(),'Example · courtyard');}catch(error){status(error.message,true);}};
+$('analyze').onclick=requestAnalysis;
+function pointFromEvent(event) {
+  const box=canvas.getBoundingClientRect();
+  return {u:THREE.MathUtils.clamp((event.clientX-box.left)/box.width,0,1),v:THREE.MathUtils.clamp((event.clientY-box.top)/box.height,0,1)};
+}
+canvas.addEventListener('pointermove',event=>{if(!$('follow-pointer').checked||picking!==null)return;({u,v}=pointFromEvent(event));updateGaze();});
+canvas.addEventListener('click',event=>{
+  const point=pointFromEvent(event);u=point.u;v=point.v;
+  if(picking!==null&&data){
+    const i=picking;refs[i]={...point,distance:Number($(`distance-${i}`).value)};
+    $(`reference-${i}`).textContent=`Pixel ${Math.round(u*canvas.width)}, ${Math.round(v*canvas.height)}`;
+    $(`pick-${i}`).classList.remove('active');picking=null;$('pointer-hint').textContent='Click to aim · arrow keys to adjust';
+    applyCalibration();
+  }
+  canvas.focus({preventScroll:true});updateGaze();
+});
+canvas.addEventListener('keydown',event=>{
+  const moves={ArrowLeft:[-.01,0],ArrowRight:[.01,0],ArrowUp:[0,-.01],ArrowDown:[0,.01]};
+  if(moves[event.key]){event.preventDefault();u=THREE.MathUtils.clamp(u+moves[event.key][0],0,1);v=THREE.MathUtils.clamp(v+moves[event.key][1],0,1);updateGaze();}
+});
+$('center-gaze').onclick=()=>{u=v=.5;updateGaze();};
+for(const [id,set] of [['eye-fov',value=>hfov=value],['eye-vfov',value=>efov=value]]) {
+  $(id).oninput=()=>{set(Number($(id).value));$(id+'-output').textContent=$(id).value+'°';updateGaze();};
+}
+$('photo-fov').oninput=()=>{
+  vfov=Number($('photo-fov').value);$('photo-fov-output').textContent=vfov+'°';
+  resetReferences('Camera FOV changed. Re-enter references to calibrate.');if(data)buildCloud();updateGaze();
+};
+function applyCalibration() {
+  calibration=null;if(!data)return;
+  refs.forEach((r,i)=>{if(r)r.distance=Number($(`distance-${i}`).value);});
+  try {calibration=calibrateDepth(refs,data.depth,aspect(),vfov);$('calibration-status').textContent='Approximate meters enabled for this photo. Model errors still affect depth and visible size.';}
+  catch(error){$('calibration-status').textContent=error.message;}
+  buildCloud();updateGaze();
+}
+for(let i=0;i<2;i++) {
+  $(`pick-${i}`).onclick=()=>{picking=picking===i?null:i;[0,1].forEach(j=>$(`pick-${j}`).classList.toggle('active',picking===j));$('pointer-hint').textContent=picking===null?'Click to aim · arrow keys to adjust':`Click surface ${i+1} for calibration`;} ;
+  $(`distance-${i}`).oninput=applyCalibration;
+}
+$('clear-calibration').onclick=()=>{resetReferences();if(data)buildCloud();updateGaze();};
+$('download').onclick=()=>{const link=document.createElement('a');link.download=`${filename.replace(/[^a-z0-9.-]/gi,'-')}-gaze.png`;link.href=canvas.toDataURL('image/png');link.click();};
+
+// The cloud is a back-projection of visible pixels, not generated hidden geometry.
+const host=$('reconstruction');
+let renderer=null, scene=null, view=null, controls=null, cloud=null, cone=null, modelCenter=new THREE.Vector3(), modelRadius=5;
+try {
+  renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor('#202c29');renderer.domElement.hidden=true;host.append(renderer.domElement);
+  scene=new THREE.Scene();view=new THREE.PerspectiveCamera(50,1,.01,500);
+  controls=new OrbitControls(view,renderer.domElement);controls.enableDamping=true;controls.minDistance=.1;
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.08,16,12),new THREE.MeshBasicMaterial({color:'#d5edbb',wireframe:true}));scene.add(head);
+  scene.add(new THREE.AxesHelper(.4));
+  new ResizeObserver(()=>{const {width,height}=host.getBoundingClientRect();renderer.setSize(width,height);view.aspect=width/height;view.updateProjectionMatrix();}).observe(host);
+  renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,view);});
+} catch(error) {
+  $('reconstruction-placeholder').textContent='WebGL is unavailable. Photo analysis and click-to-aim still work; enable hardware acceleration for the 3D preview.';
+}
+function dispose(object){if(!object)return;scene.remove(object);object.geometry.dispose();object.material.dispose();}
+function clearCloud(){if(!renderer)return;dispose(cloud);dispose(cone);cloud=cone=null;renderer.domElement.hidden=true;$('reconstruction-placeholder').hidden=false;$('reset-3d').disabled=true;}
+function buildCloud() {
+  if(!renderer||!data)return;
+  dispose(cloud);const vertices=[],colors=[];
+  const pixels=source.getImageData(0,0,original.width,original.height).data;
+  for(let y=0;y<data.depth.height;y++)for(let x=0;x<data.depth.width;x++) {
+    const px=(x+.5)/data.depth.width,py=(y+.5)/data.depth.height;
+    const p=depthAt(data.depth,px,py),z=axialDepth(p,calibration);
+    if(z===null||z>150)continue;
+    const ray=rayForPixel(px,py,aspect(),vfov),d=z/ray.axialFactor;
+    vertices.push(ray.x*d,ray.y*d,ray.z*d);
+    const i=(Math.min(original.height-1,Math.floor(py*original.height))*original.width+Math.min(original.width-1,Math.floor(px*original.width)))*4;
+    let r=pixels[i]/255,g=pixels[i+1]/255,b=pixels[i+2]/255;
+    if(!objectAt(px,py))r=g=b=.2126*r+.7152*g+.0722*b;
+    const color=new THREE.Color(r,g,b).convertSRGBToLinear();colors.push(color.r,color.g,color.b);
+  }
+  if(!vertices.length){$('reconstruction-placeholder').hidden=false;$('reconstruction-placeholder').textContent='No positive depths in the calibrated range. Clear calibration and check the reference points.';return;}
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geometry.computeBoundingSphere();modelCenter.copy(geometry.boundingSphere.center);modelRadius=Math.max(.5,geometry.boundingSphere.radius);
+  cloud=new THREE.Points(geometry,new THREE.PointsMaterial({size:modelRadius*.006,vertexColors:true,sizeAttenuation:true}));scene.add(cloud);
+  renderer.domElement.hidden=false;$('reconstruction-placeholder').hidden=true;$('reset-3d').disabled=false;
+  reset3d();updateCone();
+}
+function reset3d(){if(!view)return;controls.target.copy(modelCenter);view.position.copy(modelCenter).add(new THREE.Vector3(modelRadius*.95,modelRadius*.45,modelRadius*1.8));controls.update();}
+$('reset-3d').onclick=reset3d;
+function updateCone() {
+  if(!renderer||!data||!cloud)return;
+  dispose(cone);const ray=rayForPixel(u,v,aspect(),vfov),z=axialDepth(depthAt(data.depth,u,v),calibration);
+  if(z===null){cone=null;return;}
+  const distance=Math.min(150,z/ray.axialFactor);
+  const segments=[],points=ring();
+  for(let i=0;i<points.length-1;i++) {
+    const a=points[i].direction,b=points[i+1].direction;
+    segments.push(a.x*distance,a.y*distance,a.z*distance,b.x*distance,b.y*distance,b.z*distance);
+    if(i%12===0)segments.push(0,0,0,a.x*distance,a.y*distance,a.z*distance);
+  }
+  segments.push(0,0,0,ray.x*distance,ray.y*distance,ray.z*distance);
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(segments,3));
+  cone=new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({color:'#b8ed9a',transparent:true,opacity:.75}));scene.add(cone);
+}

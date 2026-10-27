@@ -1,29 +1,26 @@
 <!doctype html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Headspace · Room vision simulator</title></head>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Headspace · Photo reconstruction</title></head>
 <body>
-<div class="app">
-  <header><a class="brand" href="."><span class="brand-icon">◈</span> HEADSPACE <span class="tag">VISION LAB / 01</span></a><span class="live"><i></i> LIVE SIMULATION</span></header>
-  <main>
-    <section class="scene-panel">
-      <div class="scene-heading"><div><span class="eyebrow">A VIRTUAL POINT OF VIEW</span><h1>A room through your eyes.</h1><p>Turn your head. Explore the space.</p></div><span class="scene-badge">SCENE 01 · LIVING ROOM</span></div>
-      <div id="viewport" tabindex="0" aria-label="3D room. Drag to look around, or use arrow keys.">
-        <div id="render-error" role="alert" hidden></div>
-        <div class="view-top"><span><i></i> HEAD CAMERA</span><span id="view-fov">70° VERTICAL FOV</span></div>
-        <div class="crosshair" aria-hidden="true"><span></span></div>
-        <div class="target-label"><span id="target-name">Looking into the room</span><strong id="target-distance">—</strong></div>
-        <div class="view-bottom"><span id="interaction-hint">↔ Click & drag to look around</span><button id="reset">↺ Reset view</button></div>
-      </div>
-      <div class="caption"><span>01 / PROCEDURAL ROOM</span><p>A furnished 6 × 7 m room. All dimensions and distances come from the 3D scene.</p></div>
-    </section>
-    <aside>
-      <section class="instrument"><div class="section-title"><h2>Head position</h2><span class="small-tag">METERS</span></div><p class="muted">An observer at a fixed floor position.</p><div class="coords"><div><span>X</span><strong>0.00</strong></div><div><span>Y · HEIGHT</span><strong id="height-value">1.65</strong></div><div><span>Z</span><strong>2.40</strong></div></div><label for="height">Eye height <output id="height-output">1.65 m</output></label><input id="height" type="range" min="0.8" max="2.1" step="0.01" value="1.65"></section>
-      <section class="instrument"><div class="section-title"><h2>Viewing direction</h2><span class="small-tag">LIVE</span></div><div class="angles"><div><span>TURN / YAW</span><strong id="yaw-value">0°</strong></div><div><span>TILT / PITCH</span><strong id="pitch-value">0°</strong></div></div><label for="fov">Vertical field of view <output id="fov-output">70°</output></label><input id="fov" type="range" min="40" max="100" step="1" value="70"></section>
-      <section class="instrument"><div class="section-title"><h2>At the crosshair</h2><span class="small-tag">SURFACE HIT</span></div><h3 id="object-name">—</h3><p id="object-description" class="muted">Point the crosshair at an object.</p><dl><div><dt>Surface distance</dt><dd id="surface-distance">—</dd></div><div><dt>Width × height × depth</dt><dd id="object-size">—</dd></div></dl></section>
-      <section class="instrument map-section"><div class="section-title"><h2>Room overview</h2><span class="small-tag">TOP VIEW</span></div><canvas id="map" width="520" height="340" aria-label="Overhead room map with camera direction"></canvas><div class="map-legend"><span><i></i> You & viewing cone</span><span>6 × 7 m</span></div></section>
-      <p class="footnote">Drag or use arrow keys to rotate. R resets.<br>Distances are exact scene measurements, not estimates from a photograph.</p>
-    </aside>
-  </main>
-</div>
-<script type="module" src="/src/main.js"></script>
+<header><a class="brand" href="."><span class="brand-icon">◈</span> HEADSPACE <span class="tag">SINGLE IMAGE / VISION LAB</span></a><a class="room-link" href="/room.html">Room simulator ↗</a></header>
+<main class="photo-app">
+  <section class="workspace">
+    <div class="scene-heading"><div><span class="eyebrow">FROM A PHOTO TO A POINT OF VIEW</span><h1>Look into a photograph.</h1><p>Reconstruct visible depth. Click to direct the head.</p></div><span class="scene-badge">LOCAL VISION MODELS</span></div>
+    <div class="toolbar"><label class="upload-button" for="photo-input">＋ Open a photo</label><input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" hidden><button id="sample">Try example photo</button><button id="analyze" disabled>Analyze again</button><button id="download" disabled>Save view</button></div>
+    <p id="status" role="status" aria-live="polite">Choose a JPG, PNG, or WebP photo. Analysis runs on your local server.</p>
+    <div class="photo-stage" id="photo-stage"><div id="empty-state"><span>◈</span><h2>Start with one photograph</h2><p>A room or a scene with recognizable everyday objects works best.</p></div><canvas id="photo" hidden tabindex="0" aria-label="Photo: click to aim the virtual head; arrow keys move the gaze"></canvas></div>
+    <div class="photo-caption"><span id="filename">NO IMAGE LOADED</span><span id="pointer-hint">Click to aim · arrow keys to adjust</span></div>
+    <div class="reconstruction-heading"><div><span class="eyebrow">VISIBLE SURFACES ONLY</span><h2>3D reconstruction preview</h2></div><button id="reset-3d" disabled>Reset 3D view</button></div>
+    <div id="reconstruction"><p id="reconstruction-placeholder">Analyze a photo to build its depth-based point cloud.</p></div>
+    <p class="photo-note">Drag the 3D preview to orbit. Scroll to zoom. The head sits at the original camera; the green cone points to your selected pixel. Hidden surfaces cannot be reconstructed from this image.</p>
+  </section>
+  <aside>
+    <section class="instrument"><div class="section-title"><h2>Virtual head</h2><span class="small-tag">CLICK TO AIM</span></div><p class="muted">Position: the original camera. Direction: relative to the photograph’s center.</p><div class="angles"><div><span>YAW / RIGHT</span><strong id="photo-yaw">0°</strong></div><div><span>PITCH / UP</span><strong id="photo-pitch">0°</strong></div></div><label class="check-label"><input id="follow-pointer" type="checkbox"> Follow the cursor continuously</label><button id="center-gaze">Center gaze</button></section>
+    <section class="instrument"><div class="section-title"><h2>Eyesight oval</h2><span class="small-tag">ANGULAR FIELD</span></div><p class="muted">The oval represents an adjustable viewing cone, clipped to the photo’s available view.</p><label for="eye-fov">Horizontal range <output id="eye-fov-output">40°</output></label><input id="eye-fov" type="range" min="10" max="90" value="40"><label for="eye-vfov">Vertical range <output id="eye-vfov-output">28°</output></label><input id="eye-vfov" type="range" min="10" max="70" value="28"><p id="footprint" class="muted">Physical range requires depth calibration.</p></section>
+    <section class="instrument"><div class="section-title"><h2>At your gaze</h2><span id="depth-unit" class="small-tag">RELATIVE DEPTH</span></div><h3 id="photo-object">—</h3><p id="photo-confidence" class="muted">Analyze a photo to detect objects.</p><dl><div><dt>Relative nearness</dt><dd id="relative-depth">—</dd></div><div><dt>Camera → surface</dt><dd id="metric-distance">Uncalibrated</dd></div><div><dt>Visible width × height</dt><dd id="metric-size">Uncalibrated</dd></div></dl><p class="muted">Higher nearness means closer within this image. Object boxes are detections, not exact silhouettes. Width and height assume a front-facing surface; object thickness is unknown.</p></section>
+    <section class="instrument"><div class="section-title"><h2>Photo camera</h2><span class="small-tag">ASSUMED</span></div><label for="photo-fov">Original vertical FOV <output id="photo-fov-output">60°</output></label><input id="photo-fov" type="range" min="25" max="100" value="60"><p class="muted">Set this from the real camera if known. The assumed FOV affects reconstruction, gaze angles, and size estimates.</p></section>
+    <section class="instrument calibration"><div class="section-title"><h2>Optional metric calibration</h2><span class="small-tag">2 REFERENCES</span></div><p class="muted">Pick two visible surfaces at different depths, then enter their known straight-line distances from the original camera. Models alone do not supply real scale.</p><div class="reference"><button id="pick-0" disabled>Pick point 1</button><label for="distance-0">Distance (m)</label><input id="distance-0" type="number" min="0.1" max="100" step="0.1" placeholder="e.g. 2.0"><span id="reference-0">Not selected</span></div><div class="reference"><button id="pick-1" disabled>Pick point 2</button><label for="distance-1">Distance (m)</label><input id="distance-1" type="number" min="0.1" max="100" step="0.1" placeholder="e.g. 5.0"><span id="reference-1">Not selected</span></div><button id="clear-calibration">Clear calibration</button><p id="calibration-status" class="muted" role="status">Relative reconstruction · arbitrary scale.</p></section>
+    <section class="instrument"><div class="section-title"><h2>Recognized objects</h2><span id="object-count" class="small-tag">0</span></div><div id="object-list"><p class="muted">No analysis yet.</p></div></section>
+    <p class="footnote">Local SSDLite / COCO object detection + MiDaS relative depth. This is a 2.5D reconstruction of visible surfaces, not a complete 3D model or a measurement instrument.</p>
+  </aside>
+</main><script type="module" src="/src/photo.js"></script>
 </body></html>
