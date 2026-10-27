@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { HeadEyeModel, pixelForDirection } from './head-eye-model.js';
 import { HeadEyeView } from './head-eye-view.js';
+import { AttentionSearch } from './attention-search.js';
+import { buildAttentionCandidates } from './attention-candidates.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import sampleUrl from '../../images/2.jpg';
 import { rayForPixel, depthAt, axialDepth, calibrateDepth, estimateBox, gazeAngles, gazeRing } from './photo-geometry.js';
@@ -13,7 +15,8 @@ const original=document.createElement('canvas'), source=original.getContext('2d'
 let version=0, data=null, calibration=null, refs=[null,null], picking=null;
 let u=.5,v=.5, targetU=.5,targetV=.5, vfov=60, hfov=40, efov=28, running=false,pending=false, filename='photo';
 const motor=new HeadEyeModel();
-let avatar=null, pose=motor.step(0,true), tour=false,tourIndex=0,tourElapsed=0;
+let avatar=null, pose=motor.step(0,true), attentionCandidates=[], targetFromSearch=false;
+const attention=new AttentionSearch();
 $('instant-motion').checked=matchMedia('(prefers-reduced-motion: reduce)').matches;
 try {
   avatar=new HeadEyeView($('head-avatar'));
@@ -45,6 +48,16 @@ function draw() {
     const ty=Math.max(0,y1*h-24),tx=Math.min(x1*w,Math.max(0,w-tw-14));
     ctx.fillStyle='#233b30e6';ctx.fillRect(tx,ty,tw+14,24);
     ctx.fillStyle='#e9fae9';ctx.fillText(title,tx+7,ty+16);
+  }
+  // Unlabeled contrast regions are attention cues, not additional semantic detections.
+  for(const region of attentionCandidates.filter(c=>c.kind==='region')){
+    const [a,b,c,d]=region.box;
+    ctx.save();ctx.strokeStyle='#7bcde099';ctx.lineWidth=1;ctx.setLineDash([4,5]);ctx.strokeRect(a*w,b*h,(c-a)*w,(d-b)*h);ctx.restore();
+  }
+  if(attention.history.length){
+    ctx.save();ctx.strokeStyle='#f2b967bb';ctx.lineWidth=1.5;ctx.beginPath();
+    attention.history.forEach((p,i)=>i?ctx.lineTo(p.u*w,p.v*h):ctx.moveTo(p.u*w,p.v*h));ctx.stroke();
+    attention.history.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.u*w,p.v*h,8,0,Math.PI*2);ctx.fillStyle='#e4aa60';ctx.fill();ctx.fillStyle='#283b2c';ctx.font='bold 10px system-ui';ctx.fillText(String(i+1),p.u*w-3,p.v*h+3);});ctx.restore();
   }
   // Small amber marker is the requested point; the white crosshair is actual gaze.
   if(Math.hypot(targetU-u,targetV-v)>.004){
@@ -91,13 +104,39 @@ function paintGaze(){draw();updateReadout();updateCone();}
 function updateGaze(){
   const direction=rayForPixel(targetU,targetV,aspect(),vfov);
   const z=data&&calibration?axialDepth(depthAt(data.depth,targetU,targetV),calibration):null;
-  motor.aim(direction,z===null?null:z/direction.axialFactor);
+  motor.aim(direction,z===null?null:z/direction.axialFactor,targetFromSearch?{hfov,efov}:null);
   if($('instant-motion').checked)advanceMotion(0,true);
   paintGaze();
 }
-function stopTour(){tour=false;$('object-tour').textContent='Explore detected objects';$('object-tour').classList.remove('running');$('object-tour').setAttribute('aria-pressed','false');}
+function stopSearch(){attention.stop();updateSearchReadout();}
 function setGazeTarget(x,y,manual=true){
-  if(manual)stopTour();targetU=x;targetV=y;updateGaze();
+  if(manual)stopSearch();targetFromSearch=!manual;targetU=x;targetV=y;updateGaze();
+}
+function rebuildCandidates(){
+  attention.reset();
+  attentionCandidates=data?buildAttentionCandidates(source.getImageData(0,0,original.width,original.height),data.objects,$('search-scope').value==='all'):[];
+  const objects=attentionCandidates.filter(c=>c.kind==='object').length,regions=attentionCandidates.length-objects;
+  $('candidate-count').textContent=`${objects} recognized objects + ${regions} unlabeled visual regions`;
+  $('object-tour').disabled=!data;
+  updateSearchReadout();
+}
+function updateSearchReadout(){
+  const summary=attention.summary();
+  write('search-state',({idle:'Ready',running:'Searching',paused:'Paused',stopped:'Stopped',complete:'Search complete'})[summary.state]);
+  write('search-phase',summary.phase==='saccade'?'Saccade':summary.phase==='fixation'?'Fixation':'—');
+  write('search-coverage',`${summary.visited} / ${summary.total} inspected · ${summary.skipped} skipped`);
+  write('search-reason',summary.reason);write('search-statistics',`${summary.fixations} completed fixations · current target: ${summary.target}`);
+  $('search-progress').max=Math.max(1,summary.total);$('search-progress').value=summary.visited+summary.skipped;
+  $('search-pause').disabled=!['running','paused'].includes(summary.state);$('search-pause').textContent=summary.state==='paused'?'Resume':'Pause';
+  $('search-stop').disabled=!['running','paused'].includes(summary.state);
+  $('object-tour').classList.toggle('running',summary.state==='running');$('object-tour').setAttribute('aria-pressed',String(summary.state==='running'));
+  const panel=$('search-state');panel.dataset.visited=summary.visited;panel.dataset.total=summary.total;panel.dataset.skipped=summary.skipped;panel.dataset.fixations=summary.fixations;panel.dataset.state=summary.state;
+}
+function startSearch(point={u,v}){
+  if(!data)return;
+  $('follow-pointer').checked=false;
+  const event=attention.start(attentionCandidates,point,{aspect:aspect(),vfov,hfov,efov});
+  setGazeTarget(event.target.u,event.target.v,false);updateSearchReadout();
 }
 function write(id,text){if($(id).textContent!==text)$(id).textContent=text;}
 function advanceMotion(dt,instant=false){
@@ -125,22 +164,21 @@ $('avatar-view').onchange=()=>{
   avatar?.setView($('avatar-view').value);
   $('observer-note').textContent=$('avatar-view').value==='front'?'Facing you: the head’s right appears on your left. Drag to inspect.':'External observer view. Drag to orbit the head; this does not change its gaze.';
 };
-$('object-tour').onclick=()=>{
-  if(tour){stopTour();return;}
-  if(!data?.objects.length)return;
-  tour=true;tourIndex=0;tourElapsed=0;
-  $('object-tour').textContent='Stop object exploration';$('object-tour').classList.add('running');$('object-tour').setAttribute('aria-pressed','true');
-  const box=data.objects[0].box;setGazeTarget((box[0]+box[2])/2,(box[1]+box[3])/2,false);
-};
+$('object-tour').onclick=()=>startSearch();
+$('search-pause').onclick=()=>{if(attention.state==='paused')attention.resume();else attention.pause();updateSearchReadout();};
+$('search-stop').onclick=()=>stopSearch();
+$('search-scope').onchange=()=>{stopSearch();rebuildCandidates();paintGaze();};
+$('search-on-click').onchange=()=>{if($('search-on-click').checked)$('follow-pointer').checked=false;else stopSearch();};
+$('follow-pointer').onchange=()=>{if($('follow-pointer').checked){$('search-on-click').checked=false;stopSearch();}};
 function resetReferences(message='Relative reconstruction · arbitrary scale.') {
   refs=[null,null];calibration=null;picking=null;
   [0,1].forEach(i=>{$(`reference-${i}`).textContent='Not selected';$(`distance-${i}`).value='';$(`pick-${i}`).classList.remove('active');});
   $('calibration-status').textContent=message;
-  $('pointer-hint').textContent='Click to aim · arrow keys to adjust';
+  $('pointer-hint').textContent='Click to start search · arrow keys aim manually';
 }
 async function loadImage(blob,name) {
   const id=++version;data=null;pending=false;filename=name;
-  stopTour();$('object-tour').disabled=true;motor.reset();targetU=targetV=u=v=.5;
+  stopSearch();attention.reset();attentionCandidates=[];targetFromSearch=false;$('candidate-count').textContent='Analyze a photo to find candidates.';updateSearchReadout();$('object-tour').disabled=true;motor.reset();targetU=targetV=u=v=.5;
   resetReferences();$('object-list').replaceChildren();$('object-count').textContent='0';
   $('analyze').disabled=true;$('download').disabled=true;
   for(const i of [0,1])$(`pick-${i}`).disabled=true;
@@ -176,7 +214,7 @@ async function requestAnalysis() {
       }
       const result=await response.json();if(id!==version)continue;
       if(result.width!==canvas.width||result.height!==canvas.height||!result.depth?.values?.length)throw new Error('Analysis returned an incompatible image.');
-      data=result;resetReferences();stopTour();$('object-tour').disabled=data.objects.length===0;
+      data=result;resetReferences();rebuildCandidates();
       $('object-count').textContent=String(data.objects.length);
       const list=$('object-list');list.replaceChildren();
       for(const o of data.objects) {
@@ -189,7 +227,7 @@ async function requestAnalysis() {
       if(!data.objects.length){const p=document.createElement('p');p.className='muted';p.textContent='No COCO objects above 45% confidence. Depth is still reconstructed.';list.append(p);}
       [0,1].forEach(i=>$(`pick-${i}`).disabled=false);$('download').disabled=false;
       buildCloud();updateGaze();
-      status(`${data.objects.length} objects detected · ${data.elapsed_seconds} s · Local analysis complete. Click the photo to aim.`);
+      status(`${data.objects.length} objects detected · ${data.elapsed_seconds} s · Local analysis complete. Click the photo to begin spatial search.`);
     } catch(error) {
       if(id===version){status(`Analysis failed: ${error.message}`,true);}
     }
@@ -205,13 +243,15 @@ function pointFromEvent(event) {
 }
 canvas.addEventListener('pointermove',event=>{if(!$('follow-pointer').checked||picking!==null)return;const point=pointFromEvent(event);setGazeTarget(point.u,point.v);});
 canvas.addEventListener('click',event=>{
-  const point=pointFromEvent(event);setGazeTarget(point.u,point.v);
+  const point=pointFromEvent(event);
   if(picking!==null&&data){
+    setGazeTarget(point.u,point.v);
     const i=picking;refs[i]={...point,distance:Number($(`distance-${i}`).value)};
     $(`reference-${i}`).textContent=`Pixel ${Math.round(point.u*canvas.width)}, ${Math.round(point.v*canvas.height)}`;
-    $(`pick-${i}`).classList.remove('active');picking=null;$('pointer-hint').textContent='Click to aim · arrow keys to adjust';
+    $(`pick-${i}`).classList.remove('active');picking=null;$('pointer-hint').textContent='Click to start search · arrow keys aim manually';
     applyCalibration();
-  }
+  } else if($('search-on-click').checked&&data){startSearch(point);}
+  else setGazeTarget(point.u,point.v);
   canvas.focus({preventScroll:true});updateGaze();
 });
 canvas.addEventListener('keydown',event=>{
@@ -220,21 +260,21 @@ canvas.addEventListener('keydown',event=>{
 });
 $('center-gaze').onclick=()=>setGazeTarget(.5,.5);
 for(const [id,set] of [['eye-fov',value=>hfov=value],['eye-vfov',value=>efov=value]]) {
-  $(id).oninput=()=>{set(Number($(id).value));$(id+'-output').textContent=$(id).value+'°';updateGaze();};
+  $(id).oninput=()=>{stopSearch();set(Number($(id).value));$(id+'-output').textContent=$(id).value+'°';updateGaze();};
 }
 $('photo-fov').oninput=()=>{
-  vfov=Number($('photo-fov').value);$('photo-fov-output').textContent=vfov+'°';
+  stopSearch();vfov=Number($('photo-fov').value);$('photo-fov-output').textContent=vfov+'°';
   resetReferences('Camera FOV changed. Re-enter references to calibrate.');if(data)buildCloud();updateGaze();
 };
 function applyCalibration() {
-  calibration=null;if(!data)return;
+  stopSearch();calibration=null;if(!data)return;
   refs.forEach((r,i)=>{if(r)r.distance=Number($(`distance-${i}`).value);});
   try {calibration=calibrateDepth(refs,data.depth,aspect(),vfov);$('calibration-status').textContent='Approximate meters enabled for this photo. Model errors still affect depth and visible size.';}
   catch(error){$('calibration-status').textContent=error.message;}
   buildCloud();updateGaze();
 }
 for(let i=0;i<2;i++) {
-  $(`pick-${i}`).onclick=()=>{stopTour();picking=picking===i?null:i;[0,1].forEach(j=>$(`pick-${j}`).classList.toggle('active',picking===j));$('pointer-hint').textContent=picking===null?'Click to aim · arrow keys to adjust':`Click surface ${i+1} for calibration`;} ;
+  $(`pick-${i}`).onclick=()=>{stopSearch();picking=picking===i?null:i;[0,1].forEach(j=>$(`pick-${j}`).classList.toggle('active',picking===j));$('pointer-hint').textContent=picking===null?'Click to start search · arrow keys aim manually':`Click surface ${i+1} for calibration`;} ;
   $(`distance-${i}`).oninput=applyCalibration;
 }
 $('clear-calibration').onclick=()=>{resetReferences();if(data)buildCloud();updateGaze();};
@@ -300,14 +340,11 @@ function updateCone() {
 let previousFrame=performance.now();
 function animateHead(now){
   const dt=Math.min(.05,(now-previousFrame)/1000);previousFrame=now;
-  if(tour&&data?.objects.length){
-    tourElapsed+=dt;
-    if(tourElapsed>=1.4){
-      tourElapsed=0;tourIndex=(tourIndex+1)%data.objects.length;
-      const box=data.objects[tourIndex].box;setGazeTarget((box[0]+box[2])/2,(box[1]+box[3])/2,false);
-    }
-  }
   advanceMotion(dt,$('instant-motion').checked);
+  const event=attention.tick(dt,pose);
+  if(event?.type==='target')setGazeTarget(event.target.u,event.target.v,false);
+  if(event)paintGaze();
+  updateSearchReadout();
   requestAnimationFrame(animateHead);
 }
 requestAnimationFrame(animateHead);

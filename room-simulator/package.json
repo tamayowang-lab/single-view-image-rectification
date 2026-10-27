@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node tests/geometry.test.js && node tests/head-eye.test.js"
+    "test": "node tests/geometry.test.js && node tests/head-eye.test.js && node tests/attention.test.js"
   },
   "dependencies": {
     "three": "0.180.0"

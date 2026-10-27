@@ -1,4 +1,5 @@
 import { Euler, Quaternion, Vector3, MathUtils } from 'three';
+import { insideViewingCone } from './visual-field.js';
 
 const forward = new Vector3(0, 0, -1);
 const rad = MathUtils.degToRad;
@@ -30,6 +31,7 @@ export class HeadEyeModel {
     this.target = forward.clone();
     this.distance = null;
     this.elapsed = 1;
+    this.attentionHeadGoal=null;this.gazeDirection=forward.clone();this.headRecruited=false;
     return this.step(0, true);
   }
   setMode(mode) {
@@ -37,7 +39,7 @@ export class HeadEyeModel {
     this.mode = mode;
     this.elapsed = 0;
   }
-  aim(direction, metricDistance = null) {
+  aim(direction, metricDistance = null, attention = null) {
     const next = new Vector3(direction.x, direction.y, direction.z);
     if (![next.x, next.y, next.z].every(Number.isFinite) || next.lengthSq() < 1e-10 || next.z >= 0) {
       throw new Error('Gaze target must be a finite forward-facing direction');
@@ -45,6 +47,16 @@ export class HeadEyeModel {
     next.normalize();
     // Continuous pointer tracking must not continually restart the head's delay.
     if (this.target.angleTo(next) > rad(3)) this.elapsed = 0;
+    this.attentionHeadGoal=null;this.headRecruited=false;
+    if(attention){
+      const local=next.clone().applyQuaternion(quaternion(this.head.yaw,this.head.pitch).invert());
+      const localAngles=angles(local);
+      this.headRecruited=!insideViewingCone(next,this.gazeDirection,attention.hfov,attention.efov)
+        ||Math.abs(localAngles.yaw)>25||Math.abs(localAngles.pitch)>18;
+      this.attentionHeadGoal=this.headRecruited
+        ? {yaw:clamp(angles(next).yaw*.65,-60,60),pitch:clamp(angles(next).pitch*.6,-40,40)}
+        : {...this.head};
+    }
     this.target.copy(next);
     this.distance = Number.isFinite(metricDistance) && metricDistance >= .2 && metricDistance <= 150 ? metricDistance : null;
   }
@@ -52,7 +64,7 @@ export class HeadEyeModel {
     dt = clamp(Number.isFinite(dt) ? dt : 0, 0, .05);
     this.elapsed += dt;
     const targetAngles = angles(this.target);
-    const headGoal = this.mode === 'eyes-only' ? { yaw: 0, pitch: 0 } : {
+    const headGoal = this.mode === 'eyes-only' ? { yaw: 0, pitch: 0 } : this.attentionHeadGoal ?? {
       yaw: clamp(targetAngles.yaw * .65, -60, 60), pitch: clamp(targetAngles.pitch * .6, -40, 40),
     };
     if (instant || this.elapsed >= .09 || this.mode === 'eyes-only') {
@@ -81,13 +93,14 @@ export class HeadEyeModel {
         direction: forward.clone().applyQuaternion(localQuaternion).applyQuaternion(headQuaternion) };
     });
     const gazeDirection = eyePoses[0].direction.clone().add(eyePoses[1].direction).normalize();
+    this.gazeDirection.copy(gazeDirection);
     const headMoving = Math.abs(this.head.yaw-headGoal.yaw)+Math.abs(this.head.pitch-headGoal.pitch) > .2;
     const error = deg(gazeDirection.angleTo(this.target));
     const phase = limited ? (this.mode === 'eyes-only' ? 'Eye limit' : 'Head catching up')
       : error > .3 ? 'Eyes turning' : headMoving ? 'Head following' : 'Fixating';
     return { head: { ...this.head }, headQuaternion, eyes: eyePoses, gazeDirection,
       gaze: angles(gazeDirection), target: { ...targetAngles }, distance: this.distance,
-      vergence: this.distance !== null, limited, phase, error };
+      vergence: this.distance !== null, limited, phase, error, headRecruited:this.headRecruited };
   }
 }
 
