@@ -19,7 +19,11 @@ def predict(record: dict,config: Config,provider_factory=None) -> dict:
     """Only the declared initial fixation may enter prediction; never future fixations."""
     start=(record['fixations'][0]['x'],record['fixations'][0]['y']) if record['initial_fixation_included'] else None
     objects,provider=(provider_factory or ProviderFactory()).get(config,record)
-    return run(load_image(record['image_path']),config,image_id=record['image_id'],target=record.get('task',''),start=start,depth_provider=provider,object_provider=objects,include_depth_reference=False)
+    kwargs={}
+    if config.active.get('enabled'):
+        if 'valid_stimulus_bounds' not in record:raise ValueError('Phase 4B empirical evaluation requires declared stimulus bounds; never infer validity from RGB darkness')
+        kwargs['stimulus_bounds']=record['valid_stimulus_bounds']
+    return run(load_image(record['image_path']),config,image_id=record['image_id'],target=record.get('task',''),start=start,depth_provider=provider,object_provider=objects,include_depth_reference=False,**kwargs)
 
 
 def evaluate(manifest: str,config: Config,out: str,*,split: str='test',seeds=(11,23,37),ablations: bool=True) -> dict:

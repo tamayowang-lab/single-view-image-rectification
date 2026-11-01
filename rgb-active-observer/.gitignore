@@ -17,3 +17,10 @@ reports/phase4a/*private*
 reports/phase4a/predictions/
 reports/phase4a/overlays/
 reports/phase4a/reference-*
+
+# Build artifacts and raw Phase 4B research replays stay local.
+build/
+reports/phase4b/*private*
+reports/phase4b/predictions/
+reports/phase4b/images/
+reports/phase4b/data/

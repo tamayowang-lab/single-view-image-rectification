@@ -47,6 +47,9 @@ def run_phase2(image: np.ndarray,config: Config | None=None,*,image_id="image",t
 def run(image,config=None,**kwargs):
     """Dispatch without changing the archived Phase-2 numerical path by default."""
     cfg=(config or Config()).validate()
+    if cfg.active.get('enabled',False):
+        from active_observer.active.runner import run_active
+        return run_active(image,cfg,**kwargs)
     if cfg.timing_model=='phase2':return run_phase2(image,cfg,**kwargs)
     from .timed_runner import run_timed
     return run_timed(image,cfg,**kwargs)

@@ -37,6 +37,7 @@ class Config:
     timing: dict = field(default_factory=dict)
     policy: str = "full"
     weights: dict = field(default_factory=lambda: dict(salience=.8, task=1.3, context=.35, novelty=.45, info=.65, move=.5, history=.6))
+    active: dict = field(default_factory=dict)
     context_priors: dict = field(default_factory=dict)
 
     def validate(self):
@@ -51,6 +52,9 @@ class Config:
         if self.timing_model not in {'phase2','heuristic_lognormal','accumulator','accumulator_hold'}:raise ValueError('Unknown timing model')
         from .attention.timing import TimingParameters
         TimingParameters(**self.timing).validate()
+        from .active.options import ActiveOptions
+        options=ActiveOptions(**self.active).validate()
+        if options.enabled and self.timing_model=='phase2':raise ValueError('Phase 4B requires one of the three Phase 3 timing models; archived Phase 2 stays available with active disabled')
         if set(self.weights) != {"salience","task","context","novelty","info","move","history"}: raise ValueError("Seven explicit utility weights required")
         if any(not 0 <= float(v) < 100 for v in self.weights.values()): raise ValueError("Weights must be finite and nonnegative")
         return self

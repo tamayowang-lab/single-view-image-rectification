@@ -14,6 +14,9 @@ def data_url(image: np.ndarray) -> str:
 
 
 def write_html(image: np.ndarray,result: dict,path: str | Path) -> None:
+    if result.get("schema_version")==3 or result.get("variant") and result.get("config",{}).get("active",{}).get("enabled"):
+        from .active import write_active_html
+        return write_active_html(image,result,path)
     validate_result(image,result)
     cfg=Config(**result['config']);frames=[]
     for f in result['fixations']:
