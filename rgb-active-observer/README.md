@@ -134,6 +134,8 @@ After updating this branch, editable installations use the corrected source imme
 
 ## Hosted real-photograph inspection
 
+[Open the hosted Scene Explorer](https://rgb-active-observer.candybike.chatgpt.site) — no download or local setup required.
+
 A separate browser Scene Explorer presents the Porto photograph with nine prepared starting-point runs of this Python model. It supports playback, seeking, signed decision factors, foveated input, memory tables, a heatmap and original JSON export. It is a real-photograph demonstration, not human eye-tracking validation; it uses classical color proto-objects and no depth.
 
 Rebuild this Porto-specific viewer from a locally available copy of the Porto input photograph (update the template and provenance before substituting another scene):
