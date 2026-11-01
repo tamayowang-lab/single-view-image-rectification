@@ -87,8 +87,8 @@ class CachedDepth:
     def predict(self,image):
         key=hashlib.sha256(image.tobytes()+str(image.shape).encode()+self.identity.encode()).hexdigest();p=self.directory/(key+'.npz');meta=self.directory/(key+'.json')
         if p.exists() and meta.exists():
-            with np.load(p,allow_pickle=False) as a:return DepthFrame(a['depth'],a['valid'],a['quality'],json.loads(meta.read_text()))
-        f=self.provider.predict(image);np.savez_compressed(p,depth=f.inverse_depth,valid=f.valid,quality=f.quality);meta.write_text(json.dumps(f.metadata,allow_nan=False));return f
+            with np.load(p,allow_pickle=False) as a:return DepthFrame(a['depth'],a['valid'],a['quality'],json.loads(meta.read_text(encoding='utf-8')))
+        f=self.provider.predict(image);np.savez_compressed(p,depth=f.inverse_depth,valid=f.valid,quality=f.quality);meta.write_text(json.dumps(f.metadata,allow_nan=False), encoding='utf-8');return f
 
 
 def update_observed_depth(world,observation,frame: DepthFrame,camera):

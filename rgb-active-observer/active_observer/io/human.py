@@ -6,7 +6,7 @@ from .image import load_image
 
 
 def load_manifest(path: str | Path) -> dict:
-    path=Path(path);data=json.loads(path.read_text())
+    path=Path(path);data=json.loads(path.read_text(encoding='utf-8'))
     if data.get('coordinate_units') not in {'pixels','normalized'}: raise ValueError("Declare coordinate_units: pixels or normalized")
     if not isinstance(data.get('initial_fixation_included'),bool): raise ValueError("Declare initial_fixation_included")
     records=[];split_by_id={};split_by_hash={}
@@ -35,11 +35,11 @@ def load_manifest(path: str | Path) -> dict:
 
 def convert_coco(raw_path: str, image_manifest_path: str, out_path: str) -> dict:
     """COCO adapter requires audited display geometry; never guesses image padding."""
-    source=json.loads(Path(raw_path).read_text());meta=json.loads(Path(image_manifest_path).read_text());lookup={x['name']:x for x in meta['images']};records=[]
+    source=json.loads(Path(raw_path).read_text(encoding='utf-8'));meta=json.loads(Path(image_manifest_path).read_text(encoding='utf-8'));lookup={x['name']:x for x in meta['images']};records=[]
     for t in source:
         if t['name'] not in lookup:continue
         im=lookup[t['name']]
         if len(t['X'])!=len(t['Y']) or len(t['X'])!=len(t['T']):raise ValueError("COCO coordinate/duration lengths differ")
         records.append(dict(image_id=t['name'],image=im['image'],width=im['width'],height=im['height'],split=im['split'],participant=str(t['subject']),task=t['task'],fixations=[dict(x=x,y=y,duration_ms=d) for x,y,d in zip(t['X'],t['Y'],t['T'])]))
     out=dict(schema_version=1,dataset_name='COCO-Search18 user-supplied records',coordinate_units=meta['coordinate_units'],initial_fixation_included=meta['initial_fixation_included'],geometry_notes=meta['geometry_notes'],records=records)
-    Path(out_path).write_text(json.dumps(out,allow_nan=False));return out
+    Path(out_path).write_text(json.dumps(out,allow_nan=False), encoding='utf-8');return out

@@ -7,16 +7,16 @@ from active_observer.config import Config
 
 def manifest(tmp_path):
     im=np.full((30,50,3),60,np.uint8);cv2.imwrite(str(tmp_path/'im.png'),im)
-    d=dict(dataset_name='test fixture',synthetic=True,coordinate_units='pixels',initial_fixation_included=True,records=[dict(image_id='a',image='im.png',width=50,height=30,task='',participant='fixture',split='test',fixations=[dict(x=25,y=15,duration_ms=200),dict(x=10,y=10,duration_ms=300)])]);p=tmp_path/'manifest.json';p.write_text(json.dumps(d));return p,d
+    d=dict(dataset_name='test fixture',synthetic=True,coordinate_units='pixels',initial_fixation_included=True,records=[dict(image_id='a',image='im.png',width=50,height=30,task='',participant='fixture',split='test',fixations=[dict(x=25,y=15,duration_ms=200),dict(x=10,y=10,duration_ms=300)])]);p=tmp_path/'manifest.json';p.write_text(json.dumps(d), encoding='utf-8');return p,d
 
 def test_duplicate_pixels_cannot_cross_splits(tmp_path):
-    p,d=manifest(tmp_path);other=copy.deepcopy(d['records'][0]);other.update(image_id='new-name',split='train');d['records'].append(other);p.write_text(json.dumps(d))
+    p,d=manifest(tmp_path);other=copy.deepcopy(d['records'][0]);other.update(image_id='new-name',split='train');d['records'].append(other);p.write_text(json.dumps(d), encoding='utf-8')
     with pytest.raises(ValueError,match='leakage'):load_manifest(p)
 
 def test_units_dimensions_and_initial_convention_checked(tmp_path):
-    p,d=manifest(tmp_path);d['records'][0]['width']=51;p.write_text(json.dumps(d))
+    p,d=manifest(tmp_path);d['records'][0]['width']=51;p.write_text(json.dumps(d), encoding='utf-8')
     with pytest.raises(ValueError,match='dimensions'):load_manifest(p)
-    d['records'][0]['width']=50;d['coordinate_units']='unknown';p.write_text(json.dumps(d))
+    d['records'][0]['width']=50;d['coordinate_units']='unknown';p.write_text(json.dumps(d), encoding='utf-8')
     with pytest.raises(ValueError):load_manifest(p)
 
 def test_future_human_fixations_cannot_change_predictions(tmp_path):
@@ -36,7 +36,7 @@ def test_evaluation_labels_synthetic_and_no_depth(tmp_path):
 def test_standalone_viewer_escapes_embedded_labels(tmp_path):
     from active_observer.simulation.runner import run
     from active_observer.viz.html import write_html
-    r=run(np.zeros((20,30,3),np.uint8),Config(max_fixations=1),target='</script><script>alert(1)</script>');p=tmp_path/'view.html';write_html(np.zeros((20,30,3),np.uint8),r,p);assert '"target": "</script>' not in p.read_text()
+    r=run(np.zeros((20,30,3),np.uint8),Config(max_fixations=1),target='</script><script>alert(1)</script>');p=tmp_path/'view.html';write_html(np.zeros((20,30,3),np.uint8),r,p);assert '"target": "</script>' not in p.read_text(encoding='utf-8')
 
 def test_visualization_rejects_wrong_scene(tmp_path):
     from active_observer.simulation.runner import run

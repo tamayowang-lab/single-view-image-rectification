@@ -48,3 +48,7 @@ Added strict generic manifest and COCO conversion, test/validation split enforce
 4. Characterize association and uncertainty on cluttered photographs. Covariance/quality are heuristic; occlusion reasoning, perturbation consistency and metric RGB-D are not implemented.
 
 M5 physical camera pose, robotics, head–eye physiology and Unity remain intentionally outside V1.
+
+## Windows portability correction
+
+Explicit UTF-8 added at all project text/CSV boundaries. A regression emulates cp1252, demonstrates the original template decode failure without explicit encoding, and verifies successful UTF-8 rendering. Pandas is imported only for evaluation, so optional Bottleneck warnings do not affect `run-one`. Cumulative suite: 30 passing tests; `run-one` and synthetic evaluation rerun successfully. Native Windows execution remains to be confirmed by the user.

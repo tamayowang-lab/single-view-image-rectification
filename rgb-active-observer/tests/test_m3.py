@@ -13,7 +13,7 @@ def test_signed_decomposition_matches_utility():
 
 def test_visualizations_work_without_server(tmp_path):
     im=np.zeros((40,60,3),np.uint8);r=run(im,Config(max_fixations=2));dashboard(im,r,tmp_path/'a.png');write_html(im,r,tmp_path/'a.html');assert (tmp_path/'a.png').stat().st_size>1000
-    s=(tmp_path/'a.html').read_text();assert 'data:image/png;base64,' in s;assert '__OBSERVER_DATA__' not in s;assert 'https://cdn' not in s
+    s=(tmp_path/'a.html').read_text(encoding='utf-8');assert 'data:image/png;base64,' in s;assert '__OBSERVER_DATA__' not in s;assert 'https://cdn' not in s
 
 def test_private_semantic_labels_do_not_change_peripheral_search():
     im=np.zeros((60,100,3),np.uint8);cfg=Config(max_fixations=1)

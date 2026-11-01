@@ -8,7 +8,6 @@ from .viz.dashboard import dashboard
 from .viz.html import write_html
 from .perception.depth import ConstantDepth,PrecomputedDepth,CachedDepth,TransformersDepth
 from .perception.objects import FovealTransformersObjects
-from .evaluation.batch import evaluate
 from .io.human import convert_coco
 
 
@@ -22,13 +21,14 @@ def main():
     a=p.parse_args()
     if a.command=='import-coco':convert_coco(a.raw,a.image_manifest,a.out);return
     if a.command=='evaluate':
+        from .evaluation.batch import evaluate
         r=evaluate(a.manifest,Config.load(a.config),a.out,split=a.split,seeds=a.seeds);print(json.dumps({k:r[k] for k in ['status','images','participants','depth_tested']}));return
     if a.command=='run-batch':
         cfg=Config.load(a.config);root=Path(a.out);root.mkdir(parents=True,exist_ok=True)
         for name in a.images:
             im=load_image(name);r=run(im,cfg,image_id=Path(name).stem);folder=root/Path(name).stem
             if folder.exists():raise ValueError(f'Batch output collision: {folder}')
-            folder.mkdir();(folder/'run.json').write_text(json.dumps(r,allow_nan=False));dashboard(im,r,folder/'dashboard.png');write_html(im,r,folder/'inspector.html')
+            folder.mkdir();(folder/'run.json').write_text(json.dumps(r,allow_nan=False), encoding='utf-8');dashboard(im,r,folder/'dashboard.png');write_html(im,r,folder/'inspector.html')
         return
     image=load_image(a.image)
     if a.command=='run-one':
@@ -38,7 +38,7 @@ def main():
         if a.depth and a.depth_checkpoint: raise ValueError('Choose precomputed/dummy depth OR pretrained checkpoint')
         if a.depth_checkpoint: provider=CachedDepth(TransformersDepth(a.depth_checkpoint,revision=a.revision,allow_download=a.allow_model_download,output_kind=a.depth_kind),'.cache/depth',a.depth_checkpoint+'@'+a.revision+':'+a.depth_kind)
         detector=FovealTransformersObjects(a.detector_checkpoint,revision=a.revision,allow_download=a.allow_model_download) if a.detector_checkpoint else None
-        result=run(image,cfg,depth_provider=provider,object_provider=detector,image_id=Path(a.image).stem,target=a.target,start=a.start);out=Path(a.out);out.mkdir(parents=True,exist_ok=True);(out/'run.json').write_text(json.dumps(result,indent=2,allow_nan=False));dashboard(image,result,out/'dashboard.png');write_html(image,result,out/'inspector.html');print(json.dumps(dict(result=str(out/'run.json'),dashboard=str(out/'dashboard.png'),fixations=len(result['fixations']),reason=result['stop_reason'])))
-    else: dashboard(image,json.loads(Path(a.result).read_text()),a.out,a.step)
+        result=run(image,cfg,depth_provider=provider,object_provider=detector,image_id=Path(a.image).stem,target=a.target,start=a.start);out=Path(a.out);out.mkdir(parents=True,exist_ok=True);(out/'run.json').write_text(json.dumps(result,indent=2,allow_nan=False), encoding='utf-8');dashboard(image,result,out/'dashboard.png');write_html(image,result,out/'inspector.html');print(json.dumps(dict(result=str(out/'run.json'),dashboard=str(out/'dashboard.png'),fixations=len(result['fixations']),reason=result['stop_reason'])))
+    else: dashboard(image,json.loads(Path(a.result).read_text(encoding='utf-8')),a.out,a.step)
 
 if __name__=='__main__': main()

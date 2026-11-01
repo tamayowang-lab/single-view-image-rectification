@@ -42,6 +42,6 @@ class Config:
 
     @classmethod
     def load(cls, path=None):
-        return cls(**(yaml.safe_load(Path(path).read_text()) or {})).validate() if path else cls().validate()
+        return cls(**(yaml.safe_load(Path(path).read_text(encoding='utf-8')) or {})).validate() if path else cls().validate()
 
     def to_dict(self): return asdict(self)

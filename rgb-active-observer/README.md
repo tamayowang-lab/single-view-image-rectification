@@ -119,3 +119,15 @@ configs/ examples/ tests/ scripts/ docs/
 See [`docs/milestones.md`](docs/milestones.md) for staged checks and assumptions. Tested with Python 3.12.14, NumPy 2.3.5, SciPy 1.17.0, OpenCV 4.11.0, Matplotlib 3.10.8, pandas 2.2.3, PyYAML 6.0.3, pytest 8.3.5. Pretrained extras are optional and were not installed. A Python 3.11/3.12 CI template is included under this project’s `.github/workflows/`; because the project is nested, enabling CI requires placing that template at repository root with the proper working directory. No remote CI run is claimed.
 
 There is no head/eye physiology, robot controller, Unity, SLAM, novel viewpoint synthesis, database, or previous-project dependency in this V1.
+
+## Windows text encoding
+
+Text inputs, the UTF-8 HTML template, JSON outputs, and CSV reports explicitly use UTF-8. The portability regression suite emulates a Windows cp1252 default; a native Windows run has not been performed here. `run-one` does not import pandas; statistics dependencies load only for `evaluate`.
+
+If a console command resolves to another Anaconda environment, use the active environment's interpreter explicitly:
+
+```powershell
+python -m active_observer.cli run-one examples/synthetic.png
+```
+
+After updating this branch, editable installations use the corrected source immediately. For a non-editable installation, reinstall from this directory with `python -m pip install .`.
