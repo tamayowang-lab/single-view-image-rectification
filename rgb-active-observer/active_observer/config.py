@@ -1,0 +1,47 @@
+"""Explicit, fixed heuristic parameters; no empirical fit is claimed."""
+from dataclasses import dataclass, field, asdict
+from pathlib import Path
+import yaml
+
+@dataclass
+class Config:
+    seed: int = 42
+    max_fixations: int = 16
+    time_budget_ms: float = 6000
+    pixels_per_degree: float | None = None
+    central_degrees: float = 2.5
+    central_fraction: float = .075
+    memory_decay_ms: float = 12000
+    grid_columns: int = 8
+    grid_rows: int = 5
+    temperature: float = .25
+    min_duration_ms: float = 100
+    max_duration_ms: float = 800
+    stop_on_target: bool = False
+    target_threshold: float = .8
+    depth_enabled: bool = True
+    memory_enabled: bool = True
+    uncertainty_enabled: bool = True
+    novelty_enabled: bool = True
+    history_enabled: bool = True
+    exploration_enabled: bool = True
+    policy: str = "full"
+    weights: dict = field(default_factory=lambda: dict(salience=.8, task=1.3, context=.35, novelty=.45, info=.65, move=.5, history=.6))
+    context_priors: dict = field(default_factory=dict)
+
+    def validate(self):
+        if self.max_fixations < 1 or self.time_budget_ms <= 0: raise ValueError("Positive fixation and time budgets required")
+        if self.grid_columns < 1 or self.grid_rows < 1 or self.temperature <= 0: raise ValueError("Invalid grid/temperature")
+        if self.memory_decay_ms <= 0 or not 0 < self.central_fraction <= .5 or self.central_degrees <= 0: raise ValueError("Invalid memory/foveation settings")
+        if self.pixels_per_degree is not None and self.pixels_per_degree <= 0: raise ValueError("pixels_per_degree must be positive")
+        if not 0 < self.min_duration_ms <= self.max_duration_ms: raise ValueError("Invalid duration bounds")
+        if self.policy not in {"full", "center", "random_center", "salience", "salience_ior"}: raise ValueError("Unknown policy")
+        if set(self.weights) != {"salience","task","context","novelty","info","move","history"}: raise ValueError("Seven explicit utility weights required")
+        if any(not 0 <= float(v) < 100 for v in self.weights.values()): raise ValueError("Weights must be finite and nonnegative")
+        return self
+
+    @classmethod
+    def load(cls, path=None):
+        return cls(**(yaml.safe_load(Path(path).read_text()) or {})).validate() if path else cls().validate()
+
+    def to_dict(self): return asdict(self)
