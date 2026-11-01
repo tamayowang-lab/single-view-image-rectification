@@ -47,6 +47,9 @@ def run_phase2(image: np.ndarray,config: Config | None=None,*,image_id="image",t
 def run(image,config=None,**kwargs):
     """Dispatch without changing the archived Phase-2 numerical path by default."""
     cfg=(config or Config()).validate()
+    if cfg.experiment.get('enabled',False):
+        from active_observer.experiment.runner import run_experiment
+        return run_experiment(image,cfg,**kwargs)
     if cfg.active.get('enabled',False):
         from active_observer.active.runner import run_active
         return run_active(image,cfg,**kwargs)
