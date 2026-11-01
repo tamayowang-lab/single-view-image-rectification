@@ -1,6 +1,6 @@
 # RGB Active Observer
 
-**Current status: V2 / phase 2 is implemented.** Verified SSDLite/MiDaS CPU perception, bounded evidence, actual-memory 2.5D viewing and a limited real-data pilot are described in [Phase 2](#phase-2--verified-perception-25d-memory-and-real-data-pilot). Earlier V1 sections below are retained as baseline history; their “not yet tested” statements do not describe the verified V2 profile. The full V2 model still does not beat the center-prior baseline in the pilot.
+**Current status: Phase 3 timing comparison implemented; Phase 2 remains the default.** Three separately testable timing variants and their exploratory empirical comparison are described in [the timing specification](docs/phase3-timing-specification.md) and [the results](reports/phase3/phase3-report.html). Verified SSDLite/MiDaS CPU perception, bounded evidence, actual-memory 2.5D viewing and a limited real-data pilot are described in [Phase 2](#phase-2--verified-perception-25d-memory-and-real-data-pilot). Earlier V1 sections below are retained as baseline history; their “not yet tested” statements do not describe the verified V2 profile. The full V2 model still does not beat the center-prior baseline in the pilot.
 
 A new, independent Python implementation of the supplied **RGB-only Active Visual Observer v1.0** specification. It does not import or reuse Gaze Lab, its parameters, its controllers, or its empirical results.
 
@@ -173,3 +173,22 @@ New memory records include semantic/position/depth uncertainty, dispersion, obse
 Actual empirical pilot: COCO-Search18 target-present search, 12/6/6 internal image split from 24 locally available released training originals. The internal test has 60 trials, 10 participants, 6 images, 3 seeds and 14 variants (2,520 runs). **This is not official benchmark testing or population validation.** Full-model NSS is 0.089 versus center-prior 0.170; mean model fixation duration is 269 ms versus 209 ms for the human records. Depth removal worsens density/sequence means in this sample, but no significant or generalizable contribution is claimed. Raw human fixations and COCO photographs remain outside the repository.
 
 Current verification: 45 tests; real pretrained inference on two photographs; shared-provider empirical runs; browser rotation, linked selection, observed/reference depth and mobile layout. Core tests pass with NumPy 2.3.5; pretrained integration also passes with NumPy 1.26.4, Torch 2.6.0+cpu, torchvision 0.21.0+cpu and timm 0.6.13. Native Windows execution of new pretrained models remains unverified; UTF-8 and Windows-codepage regressions are retained.
+
+
+## Phase 3 — timing comparison without spatial-policy changes
+
+Three opt-in configurations use the same SSDLite/MiDaS profile and unchanged spatial policy:
+
+```bash
+active-observer run-one examples/synthetic.png --config configs/timing-heuristic_lognormal.yaml --out outputs/timing-lognormal
+active-observer run-one examples/synthetic.png --config configs/timing-accumulator.yaml --out outputs/timing-accumulator
+active-observer run-one examples/synthetic.png --config configs/timing-accumulator_hold.yaml --out outputs/timing-hold
+```
+
+These profiles require the same cached pretrained checkpoints as `configs/pretrained-cpu.yaml`; see the Phase 2 setup. To test timing with classical perception, set `timing_model` and `timing` in a copy of the default configuration instead. `run.json` records actual accumulator, processing, release, preparation and execution states. The private [timing lab](https://rgb-active-observer.candybike.chatgpt.site) compares three variants at nine prepared starting points and includes the aggregate report.
+
+Reproduce the empirical protocol with `scripts/compare_timing.py contexts`, then `fit`, then `evaluate` (see `--help`). Keep training/validation context extraction separate from test; freeze the fit JSON before evaluating test. Contexts replay observed human prefixes for conditional timing prediction only. Autonomous test trajectories use only the supplied initial fixation and exposure duration. `scripts/report_timing.py EVALUATION_DIRECTORY FIT_JSON OUTPUT_DIRECTORY` exports aggregate reports without raw human records. The demo builder accepts `--timing-fit FIT_JSON`.
+
+Validation selected the no-hold accumulator under the one-standard-error simplicity rule, although the hold variant had the lowest validation CRPS. All three remain available; no claim is made that their internal stages reproduce neural mechanisms. The six previously examined internal test scenes are exploratory. No new peripheral, semantic, EIG, head or blink mechanisms were bundled into this comparison.
+
+The exploratory test does not establish a benefit from the extra hold: conditional CRPS favors lognormal (56.89 vs 62.75 accumulator / 61.23 hold ms), while the accumulator’s lower autonomous duration-distribution error has an interval including no improvement. Spatial accuracy changes little. The full results and limitations are preserved in the report.

@@ -11,7 +11,7 @@ from active_observer.attention.policy import score,choose
 from active_observer.attention.dynamics import duration_ms
 
 
-def run(image: np.ndarray,config: Config | None=None,*,image_id="image",target="",start=None,object_provider=None,depth_provider=None,camera=None,provider_factory=None,include_depth_reference=True):
+def run_phase2(image: np.ndarray,config: Config | None=None,*,image_id="image",target="",start=None,object_provider=None,depth_provider=None,camera=None,provider_factory=None,include_depth_reference=True):
     cfg=(config or Config()).validate();h,w=image.shape[:2]
     if image.ndim!=3 or image.shape[2]!=3 or image.dtype!=np.uint8: raise ValueError("Expected uint8 RGB image")
     camera=camera or Camera(w,h)
@@ -42,3 +42,11 @@ def run(image: np.ndarray,config: Config | None=None,*,image_id="image",target="
         if elapsed>=cfg.time_budget_ms: reason="time budget";break
         pending=dict(choose(scores,selection));world.consecutive_stays=world.consecutive_stays+1 if pending['kind']=='stay' else 0;pending['distance']=float(np.hypot(pending['x']-gaze[0],pending['y']-gaze[1]));gaze=(pending['x'],pending['y'])
     return dict(schema_version=1,model="rgb-active-observer-v2",image_id=image_id,image_sha256=hashlib.sha256(image.tobytes()).hexdigest(),width=w,height=h,config=cfg.to_dict(),camera=camera.metadata(),target=target,fixations=fixations,duration_ms=elapsed,stop_reason=reason,termination=dict(action="stop",reason=reason,elapsed_ms=elapsed),depth=dict(available=depth_frame is not None,reference=depth_frame.reference() if depth_frame is not None and include_depth_reference else None,metadata=depth_frame.metadata if depth_frame is not None else None,reason="provider supplied" if depth_frame is not None else "No depth provider or depth ablated"),perception=objects.metadata() if hasattr(objects,'metadata') else dict(provider=type(objects).__name__,semantic_input='foveated RGB; private manual test boxes gated centrally'),assumptions=["RGB static scene; no fabricated viewpoints","Heuristic utility and uncalibrated belief confidence","Classical foveated proto-objects unless a replaceable provider is supplied","No fitted human-likeness claim"])
+
+
+def run(image,config=None,**kwargs):
+    """Dispatch without changing the archived Phase-2 numerical path by default."""
+    cfg=(config or Config()).validate()
+    if cfg.timing_model=='phase2':return run_phase2(image,cfg,**kwargs)
+    from .timed_runner import run_timed
+    return run_timed(image,cfg,**kwargs)

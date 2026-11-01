@@ -7,3 +7,7 @@ outputs/
 
 # Trial-level evaluation tables stay local; image/participant aggregates are published.
 reports/phase2/trials.csv
+
+# Raw timing contexts and human event records must remain local.
+reports/phase3/trials.csv
+reports/phase3/events-private.json

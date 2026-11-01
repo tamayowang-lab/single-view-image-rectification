@@ -1,4 +1,4 @@
-"""Explicit, fixed heuristic parameters; no empirical fit is claimed."""
+"""Explicit spatial heuristics and independently selectable timing parameters."""
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 import yaml
@@ -33,6 +33,8 @@ class Config:
     stay_enabled: bool = True
     max_consecutive_stays: int = 2
     perception: dict = field(default_factory=lambda: dict(objects={'provider':'classical'},depth={'provider':'none'}))
+    timing_model: str = 'phase2'
+    timing: dict = field(default_factory=dict)
     policy: str = "full"
     weights: dict = field(default_factory=lambda: dict(salience=.8, task=1.3, context=.35, novelty=.45, info=.65, move=.5, history=.6))
     context_priors: dict = field(default_factory=dict)
@@ -46,6 +48,9 @@ class Config:
         if self.policy not in {"full", "center", "random_center", "salience", "salience_ior", "random_walk"}: raise ValueError("Unknown policy")
         if self.evidence_model not in {'bounded','legacy'} or self.information_model not in {'expected_reduction','uncertainty_novelty'}: raise ValueError('Unknown evidence/information model')
         if self.evidence_time_ms<=0 or self.max_consecutive_stays<0: raise ValueError('Invalid evidence/stay parameters')
+        if self.timing_model not in {'phase2','heuristic_lognormal','accumulator','accumulator_hold'}:raise ValueError('Unknown timing model')
+        from .attention.timing import TimingParameters
+        TimingParameters(**self.timing).validate()
         if set(self.weights) != {"salience","task","context","novelty","info","move","history"}: raise ValueError("Seven explicit utility weights required")
         if any(not 0 <= float(v) < 100 for v in self.weights.values()): raise ValueError("Weights must be finite and nonnegative")
         return self
