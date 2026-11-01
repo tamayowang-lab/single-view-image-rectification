@@ -11,3 +11,9 @@ reports/phase2/trials.csv
 # Raw timing contexts and human event records must remain local.
 reports/phase3/trials.csv
 reports/phase3/events-private.json
+
+# Phase 4A publishes aggregates only.
+reports/phase4a/*private*
+reports/phase4a/predictions/
+reports/phase4a/overlays/
+reports/phase4a/reference-*
