@@ -131,3 +131,16 @@ python -m active_observer.cli run-one examples/synthetic.png
 ```
 
 After updating this branch, editable installations use the corrected source immediately. For a non-editable installation, reinstall from this directory with `python -m pip install .`.
+
+## Hosted real-photograph inspection
+
+A separate browser Scene Explorer presents the Porto photograph with nine prepared starting-point runs of this Python model. It supports playback, seeking, signed decision factors, foveated input, memory tables, a heatmap and original JSON export. It is a real-photograph demonstration, not human eye-tracking validation; it uses classical color proto-objects and no depth.
+
+Rebuild this Porto-specific viewer from a locally available copy of the Porto input photograph (update the template and provenance before substituting another scene):
+
+```bash
+python scripts/build_photo_preview.py /path/to/photo.jpg outputs/photo-site
+python -m http.server 8787 --directory outputs/photo-site
+```
+
+The page uses **prepared Python runs**, not live browser inference. Photo clicks choose the nearest of nine marked prepared starts. The original Gaze Lab photograph may be reused as input, but none of its model code, semantic detections, depth or scanpaths are reused. Source UI is in `preview/` and generated images/records remain outside Git by default. Photograph licensing/provenance must be checked before wider redistribution.
