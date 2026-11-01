@@ -52,3 +52,7 @@ M5 physical camera pose, robotics, head–eye physiology and Unity remain intent
 ## Windows portability correction
 
 Explicit UTF-8 added at all project text/CSV boundaries. A regression emulates cp1252, demonstrates the original template decode failure without explicit encoding, and verifies successful UTF-8 rendering. Pandas is imported only for evaluation, so optional Bottleneck warnings do not affect `run-one`. Cumulative suite: 30 passing tests; `run-one` and synthetic evaluation rerun successfully. Native Windows execution remains to be confirmed by the user.
+
+## Phase 2 review implementation
+
+The subsequent review is implemented in place. See `implementation-audit.md`, `phase2-changelog.md` and `reports/phase2/phase2-report.html`. Verified pretrained CPU inference on Porto and a COCO training photograph; 45 tests in both core and vision environments; actual-state browser geometry/selection checks; 60 human test trials, 6 internal test images, 10 participants, 3 seeds, 14 variants (2,520 runs). Real single/evaluation provider parity, future-fixation non-leakage and explicit no-depth/no-XYZ checks passed. Native Windows pretrained inference and population human likeness remain unproven.

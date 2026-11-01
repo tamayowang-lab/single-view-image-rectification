@@ -1,5 +1,7 @@
 # RGB Active Observer
 
+**Current status: V2 / phase 2 is implemented.** Verified SSDLite/MiDaS CPU perception, bounded evidence, actual-memory 2.5D viewing and a limited real-data pilot are described in [Phase 2](#phase-2--verified-perception-25d-memory-and-real-data-pilot). Earlier V1 sections below are retained as baseline history; their “not yet tested” statements do not describe the verified V2 profile. The full V2 model still does not beat the center-prior baseline in the pilot.
+
 A new, independent Python implementation of the supplied **RGB-only Active Visual Observer v1.0** specification. It does not import or reuse Gaze Lab, its parameters, its controllers, or its empirical results.
 
 This directory is self-contained inside the `feature/rgb-active-observer-v1` branch of `tamayowang-lab/single-view-image-rectification`. Existing repository files remain outside this directory. Work here, rather than in the parent project's Python environment.
@@ -146,3 +148,28 @@ python -m http.server 8787 --directory outputs/photo-site
 ```
 
 The page uses **prepared Python runs**, not live browser inference. Photo clicks choose the nearest of nine marked prepared starts. The original Gaze Lab photograph may be reused as input, but none of its model code, semantic detections, depth or scanpaths are reused. Source UI is in `preview/` and generated images/records remain outside Git by default. Photograph licensing/provenance must be checked before wider redistribution.
+
+## Phase 2 — verified perception, 2.5D memory and real-data pilot
+
+[Open the updated Scene Explorer](https://rgb-active-observer.candybike.chatgpt.site) · [Read the empirical/perception report](https://rgb-active-observer.candybike.chatgpt.site/reports/phase2-report.html)
+
+The original V1 sections above document the baseline and its original limitations. The current default evidence/information models are the bounded-evidence and expected-reduction variants. The verified CPU perception path is now **torchvision SSDLite + MiDaS Small**, not the still-optional Hugging Face checkpoints. See [implementation audit](docs/implementation-audit.md), [prioritized changes](docs/phase2-changelog.md), and [aggregate report](reports/phase2/phase2-report.html).
+
+Set up a dedicated Python 3.11/3.12 environment for the verified CPU profile:
+
+```powershell
+python -m pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -e ".[vision,test]"
+python scripts/setup_perception.py --download
+python -m active_observer.cli run-one my-photo.jpg --config configs/pretrained-cpu.yaml --out outputs/photo
+```
+
+The setup command verifies checkpoint SHA256 values and fetches a pinned MiDaS source revision; it never silently fabricates missing predictions. `configs/pretrained-cpu.yaml` uses the same provider factory in `run-one`, preview generation, and `evaluate`. Models/cache paths are configurable. Default configurations still support an explicit classical/no-depth baseline and warn when semantic recognition is not selected.
+
+The live viewer rotates **actual memory** XYZ/envelopes, links selected objects to RGB boxes and rows, and masks unobserved depth. Geometry is image-anchored and relative, never a reconstructed physical room or robot/world pose. `world/frames.py` is a separate future transform interface.
+
+New memory records include semantic/position/depth uncertainty, dispersion, observation count, partial extent, exposure, source and covariance in explicitly separated units. Evidence improves with duration only to its sensory ceiling. The policy logs expected reliability, expected uncertainty reduction and observation cost; novelty is separate. Stays require a remaining sensory evidence gap and are bounded; evaluation merges extra stay segments.
+
+Actual empirical pilot: COCO-Search18 target-present search, 12/6/6 internal image split from 24 locally available released training originals. The internal test has 60 trials, 10 participants, 6 images, 3 seeds and 14 variants (2,520 runs). **This is not official benchmark testing or population validation.** Full-model NSS is 0.089 versus center-prior 0.170; mean model fixation duration is 269 ms versus 209 ms for the human records. Depth removal worsens density/sequence means in this sample, but no significant or generalizable contribution is claimed. Raw human fixations and COCO photographs remain outside the repository.
+
+Current verification: 45 tests; real pretrained inference on two photographs; shared-provider empirical runs; browser rotation, linked selection, observed/reference depth and mobile layout. Core tests pass with NumPy 2.3.5; pretrained integration also passes with NumPy 1.26.4, Torch 2.6.0+cpu, torchvision 0.21.0+cpu and timm 0.6.13. Native Windows execution of new pretrained models remains unverified; UTF-8 and Windows-codepage regressions are retained.

@@ -34,11 +34,15 @@ def main():
     if a.command=='run-one':
         cfg=Config.load(a.config)
         if a.seed is not None: cfg.seed=a.seed
-        provider=ConstantDepth() if a.depth=='constant' else PrecomputedDepth(a.depth,kind=a.depth_kind) if a.depth else None
         if a.depth and a.depth_checkpoint: raise ValueError('Choose precomputed/dummy depth OR pretrained checkpoint')
-        if a.depth_checkpoint: provider=CachedDepth(TransformersDepth(a.depth_checkpoint,revision=a.revision,allow_download=a.allow_model_download,output_kind=a.depth_kind),'.cache/depth',a.depth_checkpoint+'@'+a.revision+':'+a.depth_kind)
-        detector=FovealTransformersObjects(a.detector_checkpoint,revision=a.revision,allow_download=a.allow_model_download) if a.detector_checkpoint else None
-        result=run(image,cfg,depth_provider=provider,object_provider=detector,image_id=Path(a.image).stem,target=a.target,start=a.start);out=Path(a.out);out.mkdir(parents=True,exist_ok=True);(out/'run.json').write_text(json.dumps(result,indent=2,allow_nan=False), encoding='utf-8');dashboard(image,result,out/'dashboard.png');write_html(image,result,out/'inspector.html');print(json.dumps(dict(result=str(out/'run.json'),dashboard=str(out/'dashboard.png'),fixations=len(result['fixations']),reason=result['stop_reason'])))
+        cfg.perception=dict(cfg.perception)
+        if a.depth:cfg.perception['depth']={'provider':'constant'} if a.depth=='constant' else {'provider':'precomputed','path':a.depth,'kind':a.depth_kind}
+        if a.depth_checkpoint:cfg.perception['depth']=dict(provider='transformers',model_id=a.depth_checkpoint,revision=a.revision,allow_download=a.allow_model_download,output_kind=a.depth_kind)
+        if a.detector_checkpoint:cfg.perception['objects']=dict(provider='transformers',model_id=a.detector_checkpoint,revision=a.revision,allow_download=a.allow_model_download)
+        if cfg.perception.get('objects',{}).get('provider','classical')=='classical':
+            import warnings
+            warnings.warn('Classical color-region provider selected: no semantic object recognition. Use configs/pretrained-cpu.yaml for verified pretrained providers.',UserWarning)
+        result=run(image,cfg,image_id=Path(a.image).stem,target=a.target,start=a.start);out=Path(a.out);out.mkdir(parents=True,exist_ok=True);(out/'run.json').write_text(json.dumps(result,indent=2,allow_nan=False), encoding='utf-8');dashboard(image,result,out/'dashboard.png');write_html(image,result,out/'inspector.html');print(json.dumps(dict(result=str(out/'run.json'),dashboard=str(out/'dashboard.png'),fixations=len(result['fixations']),reason=result['stop_reason'])))
     else: dashboard(image,json.loads(Path(a.result).read_text(encoding='utf-8')),a.out,a.step)
 
 if __name__=='__main__': main()

@@ -27,6 +27,7 @@ def load_manifest(path: str | Path) -> dict:
             fix.append(dict(x=x,y=y,duration_ms=duration))
         if len(fix)<2: raise ValueError("At least two fixations required for evaluation")
         rec.update(image_path=str(image_path),fixations=fix,image_sha256=digest,initial_fixation_included=data['initial_fixation_included'])
+        if rec.get('viewing_duration_ms') is not None and (not np.isfinite(rec['viewing_duration_ms']) or rec['viewing_duration_ms']<=0):raise ValueError('Invalid recorded viewing duration')
         if rec.get('depth'):rec['depth_path']=str((path.parent/rec['depth']).resolve())
         records.append(rec)
     if not records: raise ValueError("Empty manifest")

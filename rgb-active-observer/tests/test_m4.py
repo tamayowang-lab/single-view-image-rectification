@@ -30,7 +30,7 @@ def test_metrics_defined_and_undefined_cases():
     assert sequence_dtw([],a,10,10) is None
 
 def test_evaluation_labels_synthetic_and_no_depth(tmp_path):
-    p,d=manifest(tmp_path);r=evaluate(p,Config(max_fixations=3),tmp_path/'out',seeds=[3]);assert 'not empirical' in r['status'];assert not r['depth_tested'];assert len(r['variants'])==11;assert (tmp_path/'out/summary.csv').exists()
+    p,d=manifest(tmp_path);r=evaluate(p,Config(max_fixations=3),tmp_path/'out',seeds=[3]);assert 'not empirical' in r['status'];assert not r['depth_tested'];assert len(r['variants'])==14;assert (tmp_path/'out/summary.csv').exists()
     assert r['summary']['full']['spatial_dtw']==r['summary']['without_depth']['spatial_dtw']
 
 def test_standalone_viewer_escapes_embedded_labels(tmp_path):

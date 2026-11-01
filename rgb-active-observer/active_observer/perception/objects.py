@@ -12,6 +12,8 @@ class Detection:
     appearance: list[float]
     confidence: float
     salience: float
+    partial: bool=False
+    source: str="proto"
 
 class ObjectProvider(Protocol):
     def detect(self, observation: Observation) -> list[Detection]: ...

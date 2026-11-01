@@ -101,5 +101,13 @@ def update_observed_depth(world,observation,frame: DepthFrame,camera):
         mask &= observation.central & frame.valid
         if not mask.any(): continue
         values=frame.inverse_depth[mask];quality=float(np.median(frame.quality[mask]));median=float(np.median(values));dispersion=float(np.quantile(values,.75)-np.quantile(values,.25))
+        m.depth_dispersion=dispersion
         m.depth_uncertainty=float(np.clip(1-quality+dispersion,0,1));m.relative_depth=1/(.1+median)
-        m.xyz=(camera.bearing(*m.centroid)*m.relative_depth).tolist();m.covariance[2][2]=m.depth_uncertainty*m.relative_depth**2
+        m.xyz=(camera.bearing(*m.centroid)*m.relative_depth).tolist();image_var=m.image_covariance_px or [[1.,0.],[0.,1.]]
+        m.covariance=np.diag([image_var[0][0]*(m.relative_depth/camera.fx)**2,image_var[1][1]*(m.relative_depth/camera.fy)**2,m.depth_uncertainty*m.relative_depth**2]).tolist()
+        # Bounding volume spans only observed image extents and the dispersion proxy.
+        corners=[]
+        for px in [m.bbox[0],min(camera.width-1,m.bbox[2])]:
+            for py in [m.bbox[1],min(camera.height-1,m.bbox[3])]:
+                for scale in [max(.1,1-.5*m.depth_uncertainty),1+.5*m.depth_uncertainty]:corners.append(camera.bearing(px,py)*m.relative_depth*scale)
+        corners=np.array(corners);m.volume=dict(min=corners.min(axis=0).tolist(),max=corners.max(axis=0).tolist(),units='relative image-anchored units',extent_is_partial=m.partial,interpretation='uncertainty envelope of observed surfaces, not complete physical shape')

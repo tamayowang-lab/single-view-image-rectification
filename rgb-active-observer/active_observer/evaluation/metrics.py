@@ -1,7 +1,7 @@
 """Complementary metrics with explicit undefined cases; no one-score realism claim."""
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from scipy.stats import rankdata
+from scipy.stats import rankdata,ks_2samp,wasserstein_distance
 
 
 def density(points,width,height,durations=None):
@@ -45,9 +45,20 @@ def refixation_rate(points,width):
     return float(repeated/(len(points)-1))
 
 
+def merged_model_fixations(fixations):
+    """Additional stay segments are not counted as independent eye fixations."""
+    merged=[]
+    for f in fixations:
+        if merged and f.get('mode')=='stay' and np.hypot(f['x_px']-merged[-1]['x_px'],f['y_px']-merged[-1]['y_px'])<1:
+            merged[-1]['duration_ms']+=f['duration_ms']
+        else:merged.append(dict(f))
+    return merged
+
 def compare(model,record):
-    start=1 if record['initial_fixation_included'] else 0;mf=model['fixations'][1:];hf=record['fixations'][start:];w,h=model['width'],model['height']
+    start=1 if record['initial_fixation_included'] else 0;mf=merged_model_fixations(model['fixations'])[1:];hf=record['fixations'][start:];w,h=model['width'],model['height']
     mp=[(f['x_px'],f['y_px']) for f in mf];hp=[(f['x'],f['y']) for f in hf]
     a=density(mp,w,h,[f['duration_ms'] for f in mf]);b=density(hp,w,h,[f['duration_ms'] for f in hf]);sa,sb=float(a.std()),float(b.std())
     amplitude=lambda p:float(np.mean(np.linalg.norm(np.diff(np.array(p),axis=0),axis=1))) if len(p)>1 else None
-    return dict(nss=nss(a,hp),auc_fixation_vs_nonfixation_pixels=auc_pixels(a,hp),heatmap_correlation=float(np.corrcoef(a.ravel(),b.ravel())[0,1]) if min(sa,sb)>1e-12 else None,spatial_dtw=sequence_dtw(mp,hp,w,h),model_refixation_rate=refixation_rate(mp,w),human_refixation_rate=refixation_rate(hp,w),model_fixation_count=len(mp),human_fixation_count=len(hp),model_mean_duration_ms=float(np.mean([f['duration_ms'] for f in mf])) if mf else None,human_mean_duration_ms=float(np.mean([f['duration_ms'] for f in hf])) if hf else None,model_mean_amplitude_px=amplitude(mp),human_mean_amplitude_px=amplitude(hp))
+    durations_model=[f['duration_ms'] for f in mf];durations_human=[f['duration_ms'] for f in hf]
+    amplitude_model=np.linalg.norm(np.diff(np.array(mp),axis=0),axis=1).tolist() if len(mp)>1 else [];amplitude_human=np.linalg.norm(np.diff(np.array(hp),axis=0),axis=1).tolist() if len(hp)>1 else []
+    return dict(duration_wasserstein_ms=float(wasserstein_distance(durations_model,durations_human)) if durations_model and durations_human else None,amplitude_wasserstein_px=float(wasserstein_distance(amplitude_model,amplitude_human)) if amplitude_model and amplitude_human else None,nss=nss(a,hp),auc_fixation_vs_nonfixation_pixels=auc_pixels(a,hp),heatmap_correlation=float(np.corrcoef(a.ravel(),b.ravel())[0,1]) if min(sa,sb)>1e-12 else None,spatial_dtw=sequence_dtw(mp,hp,w,h),model_refixation_rate=refixation_rate(mp,w),human_refixation_rate=refixation_rate(hp,w),model_fixation_count=len(mp),human_fixation_count=len(hp),model_mean_duration_ms=float(np.mean([f['duration_ms'] for f in mf])) if mf else None,human_mean_duration_ms=float(np.mean([f['duration_ms'] for f in hf])) if hf else None,model_mean_amplitude_px=amplitude(mp),human_mean_amplitude_px=amplitude(hp))

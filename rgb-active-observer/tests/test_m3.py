@@ -23,7 +23,7 @@ def test_private_semantic_labels_do_not_change_peripheral_search():
 
 def test_stays_are_bounded_by_budget_and_target_stop_is_explicit():
     im=np.zeros((40,60,3),np.uint8);r=run(im,Config(max_fixations=3,exploration_enabled=False));assert len(r['fixations'])==3
-    p=ManualObjects([dict(bbox=[20,10,40,30],label='cup')]);r=run(im,Config(stop_on_target=True,target_threshold=.7),target='cup',object_provider=p);assert len(r['fixations'])==1;assert r['stop_reason']=='explicit target detection'
+    p=ManualObjects([dict(bbox=[20,10,40,30],label='cup')]);r=run(im,Config(stop_on_target=True,target_threshold=.7,evidence_model="legacy"),target='cup',object_provider=p);assert len(r['fixations'])==1;assert r['stop_reason']=='explicit target detection'
 
 def test_target_stop_requires_current_central_evidence():
     from active_observer.perception.objects import Detection
